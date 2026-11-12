@@ -4,14 +4,74 @@ Docker、受控出口、存储/备份、浏览器、故障恢复与 systemd 生�
 
 ## 主控：donebot-api
 
-1. 按网关已有方式构建后端和前端，启用 `donebot.enabled`。迁移 `260_donebot_cloud_subscriptions.sql`、`261_donebot_cloud_control.sql`、`262_donebot_cloud_browser.sql`、`263_donebot_cloud_runtime.sql` 随网关正常迁移机制执行；本轮未对生产数据库执行。先备份网关数据库及密钥，再按正常发布流程迁移。
+1. 按网关已有方式发布包含 Cloud 改动的后端和前端，启用 `donebot.enabled`。sh 安装的现有网关按下节使用后台在线更新；正式二进制内嵌前端和迁移。迁移 `260_donebot_cloud_subscriptions.sql`、`261_donebot_cloud_control.sql`、`262_donebot_cloud_browser.sql`、`263_donebot_cloud_runtime.sql` 随网关启动时的正常迁移机制执行，无需手工执行 SQL；本轮未对生产数据库执行。先备份网关数据库及密钥，再按正常发布流程迁移。
 2. 通过部署密钥管理注入 `DONEBOT_CLOUD_SIGNING_SEED`：32 字节随机 Ed25519 seed 的标准 Base64，只保存在主控。多副本主控使用同一 seed。可用 `node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64"))'` 生成后存入私有密钥文件，不加入版本库、终端录屏或共享日志。
-3. 在现有 DoneBot 管理页选择“Cloud 管理”，设置月费和保留天数（默认 7），再启用套餐。金额单位沿用账户余额，非新增货币单位。
+3. 在现有 DoneBot 管理页选择“Cloud 管理”，设置月费和保留天数（默认 7），先保持套餐关闭；节点和隔离预发布验收完成后再启用。金额单位沿用账户余额，非新增货币单位。
 4. 每台服务器登记名称、私网 HTTPS origin、实例名额。保存一次性显示的独立节点 token、node ID，以及主控公钥。后台可轮换或撤销节点令牌；旧令牌立即失效，轮换所得新令牌仅显示一次，写入该节点配置后重启 worker。撤销同时暂停新分配，已有实例会在租约失效后停机，数据仍留原节点。
 5. PostgreSQL 仅由网关访问。节点经 VPN/虚拟网访问主控 API，主控经私网 HTTPS 访问节点；不开放公网数据库，不给节点管理员 JWT 或数据库密码。
 6. 浏览器入口配置 `DONEBOT_CLOUD_MASTER_ORIGIN=https://donebot.cn`、`DONEBOT_CLOUD_BROWSER_ORIGIN=https://cloud.donebot.cn`。将 `*.cloud.donebot.cn` 的 DNS/TLS 指向主控，代理保留实例 Host、原路径、Origin 和 WebSocket 升级，并允许 SSE 长连接；禁止缓存。不要把实例域名直接指向 worker。详细配置及会话限制见 [浏览器接入](browser-access.md)。不配置 browser origin 时保持禁用，配置错误则主控启动失败。
 
 主控必须能校验节点 HTTPS 证书。节点反向代理只允许主控私网来源，启用 WebSocket 升级。TLS 终止代理需保留外部 `Host` 并准确设置 `X-Forwarded-Proto: https`；agent 的 `CLOUD_PUBLIC_ORIGIN` 与 worker 的 `CLOUD_MASTER_ORIGIN` 均配置为外部主控 origin，例如 `https://donebot.cn`。
+
+### 现有网关：sh 脚本安装与后台在线更新
+
+沿用 donebot-api 的 `deploy/install.sh` 安装结果：程序 `/opt/sub2api/sub2api`，systemd 服务 `sub2api`，运维环境文件 `/etc/sub2api/environment`。网关主控本身不要求安装 Docker 或 Node.js；这些运行依赖属于 Cloud 节点，两种角色在同机时才需要同时安装。自定义过安装位置的部署需先核对实际 unit，保留既有监听地址、端口和数据路径。
+
+**发布端：先提供可在线更新的版本。** donebot-api 的 Release workflow 在推送 `v*` 标签或手动选择已有版本标签时执行。正式更新包须来自包含本次 Cloud 前后端和迁移的同一提交，并提供对应架构的 `sub2api_<版本>_linux_amd64.tar.gz` / `sub2api_<版本>_linux_arm64.tar.gz` 及 `checksums.txt`。后台更新读取 `Zluo003/donebot-api` 的 GitHub Releases；只推送 `main`、上传 Cloud 仓库或发布 Docker 镜像都不会替换网关二进制。发布时关闭 `simple_release` 和 `dry_run`，并确认仓库变量 `SIMPLE_RELEASE` 未启用；simple 模式不发布后台所需的二进制下载附件。正式 Release 还需能被服务器匿名下载，API 查询用的更新 token 不会用于附件下载。
+
+**服务器首次配置：保存主控环境。** 先保全现有环境文件和部署配置，再编辑原文件并保留其他已有配置：
+
+```sh
+sudo mkdir -p /etc/sub2api
+sudo touch /etc/sub2api/environment
+sudo chown root:root /etc/sub2api/environment
+sudo chmod 0600 /etc/sub2api/environment
+sudoedit /etc/sub2api/environment
+```
+
+在文件中添加或修改以下键，使用普通 `KEY=value`，不加 `export`。占位密钥必须换成实际生成的值：
+
+```dotenv
+DONEBOT_ENABLED=true
+DONEBOT_CLOUD_SIGNING_SEED=替换为一次生成并固定保存的32字节标准Base64密钥
+DONEBOT_CLOUD_MASTER_ORIGIN=https://donebot.cn
+DONEBOT_CLOUD_BROWSER_ORIGIN=https://cloud.donebot.cn
+```
+
+密钥可在私有终端用 `openssl rand -base64 32` 生成，填入环境文件并纳入部署密钥备份；不要复制到 GitHub、截图或共享日志。后续升级、重启保留原 seed，多副本主控使用同一个值。更换 seed 会改变节点验签公钥并使已有网页会话失效，不能作为每次更新的初始化步骤。
+
+当前安装脚本生成的 unit 已包含 `EnvironmentFile=-/etc/sub2api/environment`。后台在线更新和 `install.sh upgrade` 都只替换二进制，不会补写旧 unit；曾用旧安装脚本的服务器应补一个持久 drop-in。可先只读检查加载路径：
+
+```sh
+sudo systemctl show sub2api -p EnvironmentFiles
+```
+
+如果没有 `/etc/sub2api/environment`，创建 `/etc/systemd/system/sub2api.service.d/cloud.conf`：
+
+```sh
+sudo install -d -m 0755 /etc/systemd/system/sub2api.service.d
+sudoedit /etc/systemd/system/sub2api.service.d/cloud.conf
+```
+
+文件内容：
+
+```ini
+[Service]
+EnvironmentFile=-/etc/sub2api/environment
+```
+
+修改 unit/drop-in 后执行 `sudo systemctl daemon-reload`。这种补充方式保留原 unit 的用户、监听端口、目录和在线重启设置，不用重新运行完整安装流程。
+
+**更新端：继续使用现有后台。** 备份数据库后，点击侧栏版本号 → 检查更新 → 立即更新 → 立即重启。正式二进制带 `embed` 前端，替换程序后会同时切换 Cloud 页面；重启时自动依序应用尚未执行的迁移，包括 260–263，不单独上传前端或重复导入 SQL。若另外配置过静态前端覆盖目录或独立前端反向代理，需同步更新该部署，避免继续展示旧页面。
+
+仅修改环境文件而不升级版本时，在维护窗口执行 `sudo systemctl restart sub2api` 使新环境生效。正常在线升级时的“立即重启”同样会重新加载环境；以后不再改变 unit 时无需重复执行 `daemon-reload`。可查看启动结果：
+
+```sh
+sudo systemctl is-active sub2api
+sudo journalctl -u sub2api -n 100 --no-pager
+```
+
+确认后台出现“Cloud 管理”和用户 `/cloud` 页面，保持套餐关闭，继续配置通配域名、私网节点和匹配镜像。后台更新保留主控的环境文件、数据与 systemd 配置；它不会更新 Cloud 节点代码、systemd 模板或 DoneBot/桌面镜像。网关回退仅替换程序，不撤销数据库迁移，按 [回退边界](release-runbook.md) 处理。
 
 ## 每台 Linux 节点
 

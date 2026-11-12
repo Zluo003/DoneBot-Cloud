@@ -41,6 +41,26 @@ DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU 
 
 专属桌面复用 DoneBot 的 CUA 镜像和原 MCP 工具，每账户一个桌面，默认空闲 30 分钟停止。它独立使用 1 CPU、2 GiB 内存和资料盘，无宿主 Docker 权限；停止、租约失效、备份和到期回收均联动。见 [桌面说明](docs/desktop-adapter-proposal.md)。
 
+## 服务器部署
+
+现有网关继续使用 **sh 脚本安装 + 管理后台在线更新**。Cloud 主控随 donebot-api 的发布包更新，管理入口在现有 DoneBot 后台；每台 Linux 云节点单独安装本仓库的 worker 和 agent。
+
+| 位置 | 安装和更新方式 |
+| --- | --- |
+| 网关服务器 | donebot-api 正式 Release → 后台版本菜单“立即更新”→“立即重启”；发布二进制内嵌前端和 SQL 迁移，启动时自动迁移 |
+| Cloud 节点 | 安装 Node.js 24.13–24.x、Docker、nftables、磁盘工具和本仓库 systemd 服务；配置两个已审核镜像摘要 |
+| 数据库 | 沿用网关 PostgreSQL，仅由主控访问；节点通过主控 API 通信 |
+
+首次上线顺序：
+
+1. 推送包含 Cloud 改动的 donebot-api，并发布带 Linux 二进制和 `checksums.txt` 的正式 Release。只推送源码不会让后台获得新版；仅镜像的 simple release 不适用于二进制在线更新。
+2. 在网关服务器一次性配置 `/etc/sub2api/environment`：`DONEBOT_ENABLED`、固定的 `DONEBOT_CLOUD_SIGNING_SEED`、主控和浏览器 origin。旧 systemd unit 通过 drop-in 加载该文件；后续后台更新保留这些配置和密钥。
+3. 备份网关数据库，在后台更新并重启。新二进制自动应用迁移 260–263；先保持 Cloud 套餐关闭。
+4. 为 `*.cloud.donebot.cn` 配置指向主控的 DNS/TLS；登记节点，将后台生成的节点 ID、独立 token 和主控公钥填入节点配置，再启动 agent、worker 和 health timer。
+5. 隔离预发布验收通过后，配置月费、默认 7 天保留期和节点容量，开放套餐。
+
+完整命令、持久配置、旧 unit 兼容步骤及节点环境文件见 [部署说明](docs/deployment.md)，回退边界见 [发布说明](docs/release-runbook.md)。网关在线更新只更新网关程序；Cloud 节点代码及 DoneBot/桌面镜像按节点升级流程单独发布。
+
 ## 本地运行
 
 需要 Node.js 24.13–24.x。以下命令只启动临时合成网关及运行实例，不连接真实网关或已有用户数据：

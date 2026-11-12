@@ -1,0 +1,27 @@
+[Unit]
+Description=DoneBot Cloud trusted container agent
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=donebot-cloud
+WorkingDirectory=/opt/donebot-cloud
+EnvironmentFile=/etc/donebot-cloud/agent.env
+ExecStart=/usr/bin/node /opt/donebot-cloud/src/agent-main.mjs
+ExecStopPost=/usr/bin/node /opt/donebot-cloud/src/maintenance.mjs fence
+RuntimeDirectory=donebot-cloud-agent
+RuntimeDirectoryMode=0750
+StateDirectory=donebot-cloud-agent
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=150
+NoNewPrivileges=true
+# Mounts must be visible to the local Docker daemon. This root agent is the trusted host boundary.
+PrivateMounts=false
+
+[Install]
+WantedBy=multi-user.target

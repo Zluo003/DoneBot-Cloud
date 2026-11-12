@@ -1,0 +1,174 @@
+{
+  "schema": 1,
+  "date": "2026-11-12",
+  "result": "passed",
+  "environment": "isolated macOS ARM64 processes and independent Chrome contexts",
+  "productionChanged": false,
+  "realBalancesUsed": false,
+  "realModelsUsed": false,
+  "gateway": {
+    "realLoginHandler": true,
+    "realJWTMiddleware": true,
+    "realCloudHandlersAndService": true,
+    "privatePostgreSQLUnixSocket": true,
+    "externalDSNAccepted": false,
+    "redis": "miniredis",
+    "usersSchema": "ent UsersTable",
+    "migrations": [
+      108,
+      260,
+      261,
+      262,
+      263
+    ],
+    "usersRepository": "fixture reads synthetic user rows; avatar and identity metadata are empty",
+    "unrelatedConsoleMetadata": "synthetic"
+  },
+  "runtime": {
+    "workers": 2,
+    "agents": 2,
+    "realDoneBotProcesses": 2,
+    "launcher": "DoneBot scripts/control-omb.ts isolated fixture",
+    "independentTemporaryHomes": true,
+    "engine": "fake claude",
+    "linuxContainers": false,
+    "realDesktop": false
+  },
+  "browser": {
+    "tool": "Playwright CLI",
+    "browser": "Chrome",
+    "independentContexts": 3,
+    "externalRequestsBlockedAfterSessionInitialization": true,
+    "testTLS": "Go httptest certificate, ignoreHTTPSErrors only in isolated contexts",
+    "realGatewayAndDoneBotProductionFrontendBuilds": true,
+    "launchFragmentCleared": true,
+    "userASeesOnlyOwnMarker": true,
+    "userBSeesOnlyOwnMarker": true,
+    "capacityFailureRetryObserved": true,
+    "insufficientBalanceFeedbackObserved": true,
+    "failedOperationNotReportedAccepted": true
+  },
+  "journey": [
+    {
+      "step": "A and B confirm opening via real login and Cloud pages",
+      "aBalanceBefore": 20,
+      "aBalanceAfter": 10,
+      "bBalanceBefore": 100,
+      "bBalanceAfter": 90,
+      "differentNodes": true
+    },
+    {
+      "step": "A manual stop then start within paid term",
+      "aChargeEvents": 1,
+      "dataRetained": true
+    },
+    {
+      "step": "A synthetic balance zero and term expired",
+      "actual": "stopped",
+      "subscriptionState": "past_due",
+      "newInstanceHTTPStatus": 403,
+      "openButtonDisabled": true,
+      "aChargeEvents": 1
+    },
+    {
+      "step": "A synthetic balance topped up to 20",
+      "actual": "running",
+      "balanceAfterRenewal": 10,
+      "aChargeEvents": 2,
+      "sameInstanceAndNode": true,
+      "chatMarkerRetained": true
+    },
+    {
+      "step": "A synthetic term expired eight days ago with zero balance",
+      "retentionDays": 7,
+      "visibleInstances": 0,
+      "actualFixtureHomesPurged": 1,
+      "bActual": "running",
+      "bChatMarkerRetainedAfterReload": true,
+      "bChargeEvents": 1
+    },
+    {
+      "step": "poor account retries after capacity frees",
+      "balance": 0,
+      "operationError": "billing_insufficient_balance",
+      "chargeEvents": 0,
+      "openButtonDisabled": true,
+      "retryButtonPresent": true
+    }
+  ],
+  "verification": {
+    "browserHoldGoTest": "TestCloudConsoleJourney",
+    "browserHoldDurationSeconds": 689.56,
+    "automaticJourneyAndMiddlewareRerun": "passed, package 6.273s",
+    "middlewareRegressionCases": 6,
+    "focusedCloudViewTests": 7,
+    "gatewayTypecheck": "passed",
+    "modifiedFrontendESLint": "passed",
+    "temporaryFrontendBuilds": "passed",
+    "ordinaryGoPackages": [
+      "internal/cloudbilling",
+      "internal/handler",
+      "internal/handler/admin",
+      "internal/server/routes"
+    ]
+  },
+  "fixes": [
+    "show failed asynchronous Cloud operations and allow confirmed retry with a new operation key",
+    "persist billing_insufficient_balance for clear UI feedback",
+    "reset inherited Gin NoRoute 404 before serving instance origin"
+  ],
+  "cleanup": {
+    "browserContextsClosed": true,
+    "noPersistentBrowserUserDataFound": true,
+    "goTestCompletedAfterPostgreSQLCleanup": true,
+    "privateWorkerAndDoneBotDirectoriesRemoved": true,
+    "fixtureHTTPSListenerClosed": true,
+    "dedicatedLinuxVMStatus": "Stopped"
+  },
+  "artifacts": [
+    {
+      "path": "output/playwright/console/capacity-unavailable.png",
+      "sha256": "2760666e43604a8125959e0fd58c39402e4c40246054517c5b14df4fd35402a6",
+      "includedInSourceArchive": false
+    },
+    {
+      "path": "output/playwright/console/insufficient-balance.png",
+      "sha256": "118e93fe5d9d1efb1fe5865f0f232e5a2c8df9c3feef35745ff1fa4bed53f94a",
+      "includedInSourceArchive": false
+    },
+    {
+      "path": "output/playwright/console/user-b-separated.png",
+      "sha256": "d04935e45d202d08164e1394e36b1d4f9704f504f267a646198a160f2d01e3ef",
+      "includedInSourceArchive": false
+    },
+    {
+      "path": "output/playwright/console/expired-stopped.png",
+      "sha256": "012448739a3a036fc172cfdefe0a42d8f8cbdc87a5338e6f981479bb64915d10",
+      "includedInSourceArchive": false
+    },
+    {
+      "path": "output/playwright/console/renewed-data-retained.png",
+      "sha256": "faadf366ff595c242456eed1c06a7c7810a46d8ca9c088e230d7c9e1f9a3d181",
+      "includedInSourceArchive": false
+    },
+    {
+      "path": "output/playwright/console/expired-data-deleted.png",
+      "sha256": "a157a7f6996b868d3422667b69239aed44c9a88897acad24c3d1e3575a54a701",
+      "includedInSourceArchive": false
+    },
+    {
+      "path": "output/playwright/console/user-b-after-a-deleted.png",
+      "sha256": "4f642ddfb8fc886d9642a94af10792c90049df7d541937c2ce9d3b35346583fe",
+      "includedInSourceArchive": false
+    }
+  ],
+  "limitations": [
+    "synthetic balances and model responses, no live payment or media chain",
+    "no Linux containers or desktop in this run",
+    "no packaged Electron GUI",
+    "test certificate exception does not qualify production DNS or TLS",
+    "expected stream interruptions and test-certificate handshake errors are present in logs",
+    "capacity values are configured slots, not measured server capacity",
+    "no full security audit or offsite disaster recovery qualification"
+  ]
+}

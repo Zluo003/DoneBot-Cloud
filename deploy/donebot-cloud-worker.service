@@ -1,0 +1,27 @@
+[Unit]
+Description=DoneBot Cloud node worker
+After=network-online.target donebot-cloud-agent.service
+Wants=network-online.target donebot-cloud-agent.service
+
+[Service]
+Type=simple
+User=donebot-cloud
+Group=donebot-cloud
+WorkingDirectory=/opt/donebot-cloud
+EnvironmentFile=/etc/donebot-cloud/worker.env
+ExecStart=/usr/bin/node /opt/donebot-cloud/src/worker-main.mjs
+StateDirectory=donebot-cloud-worker
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=150
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { createWorker } from '../src/worker.mjs';
+import { createAgent } from '../src/agent.mjs';
+import { SyntheticRuntime } from '../scripts/fixtures.mjs';
+import { listen, close } from '../src/common.mjs';
+
+test('worker readiness requires a healthy agent and recent successful master contact', async t => {
+  const dir = await mkdtemp('/tmp/dbc-health-'), runtime = new SyntheticRuntime(join(dir, 'runtime'));
+  let agentReady = true;
+  runtime.health = async () => ({ ready: agentReady });
+  const agentSocket = join(dir, 'agent.sock'), agent = await createAgent({ socketPath: agentSocket, runtime, development: true });
+  const master = createServer((_req, res) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ code: 0, data: { server_time: new Date().toISOString(), leases: [], command: null } })); });
+  const address = await listen(master, { host: '127.0.0.1', port: 0 });
+  const { publicKey } = generateKeyPairSync('ed25519');
+  const worker = await createWorker({ masterOrigin: `http://127.0.0.1:${address.port}`, nodeId: randomUUID(), nodeToken: 'synthetic-node-token-'.repeat(3), publicKey: publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64'), stateDir: join(dir, 'worker'), agentSocket, port: 0, development: true, pollMs: 100000 });
+  t.after(async () => { t.mock.timers.reset(); await worker.close(); await agent.close(); await close(master); await rm(dir, { recursive: true, force: true }); });
+  const health = async () => { const r = await fetch(worker.origin + '/healthz'); return { status: r.status, body: await r.json() }; };
+  await worker.poll();
+  assert.deepEqual(await health(), { status: 200, body: { ready: true, master: true, agent: true } });
+  agentReady = false;
+  assert.deepEqual(await health(), { status: 503, body: { ready: false, master: true, agent: false } });
+  agentReady = true;
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() }); t.mock.timers.tick(31000);
+  assert.deepEqual(await health(), { status: 503, body: { ready: false, master: false, agent: true } });
+});

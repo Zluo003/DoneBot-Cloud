@@ -1,0 +1,8 @@
+node_modules/
+.local/
+*.sqlite*
+*.sock
+.env
+coverage/
+.playwright-cli/
+output/playwright/

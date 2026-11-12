@@ -1,0 +1,33 @@
+{
+  "name": "donebot-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.13.0 <25"
+  },
+  "scripts": {
+    "start": "node src/worker-main.mjs",
+    "control:fixture": "node src/main.mjs",
+    "agent": "node src/agent-main.mjs",
+    "worker": "node src/worker-main.mjs",
+    "dev": "node scripts/dev.mjs",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "verify:donebot": "node scripts/verify-donebot.mjs",
+    "verify:linux": "node scripts/verify-linux.mjs",
+    "verify:egress": "node scripts/verify-egress.mjs",
+    "verify:storage": "node scripts/verify-storage.mjs",
+    "verify:recovery": "node scripts/verify-recovery.mjs",
+    "verify:socket": "node scripts/verify-socket.mjs",
+    "verify:upgrade": "node scripts/verify-upgrade.mjs",
+    "verify:reboot": "node scripts/verify-reboot.mjs",
+    "verify:browser": "node scripts/verify-browser.mjs",
+    "verify:service": "node scripts/verify-service.mjs",
+    "verify:desktop": "node scripts/verify-desktop.mjs",
+    "desktop:dockerfile": "node scripts/desktop-dockerfile.mjs",
+    "verify:backup-groups": "node scripts/verify-backup-groups.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.22.2"
+  }
+}

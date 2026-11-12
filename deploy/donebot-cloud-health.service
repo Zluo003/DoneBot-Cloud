@@ -1,0 +1,14 @@
+[Unit]
+Description=DoneBot Cloud node readiness check
+After=donebot-cloud-worker.service
+
+[Service]
+Type=oneshot
+User=donebot-cloud
+WorkingDirectory=/opt/donebot-cloud
+EnvironmentFile=-/etc/donebot-cloud/health.env
+ExecStart=/usr/bin/node /opt/donebot-cloud/scripts/healthcheck.mjs
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true

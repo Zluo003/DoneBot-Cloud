@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
+import { DockerRuntime } from '../src/docker.mjs';
+
+if (process.platform !== 'linux' || process.getuid() !== 0 || process.env.CLOUD_DISPOSABLE_LINUX !== '1') throw new Error('run only in a disposable root Linux fixture');
+const dir = await mkdtemp('/tmp/dbc-recovery-'), ids = [randomUUID(), randomUUID()];
+const config = { stateDir: join(dir, 'resources'), image: process.env.CLOUD_DONEBOT_IMAGE, binary: '/usr/bin/docker', storage: 'bounded-ext4', storageBytes: 128 * 1024 ** 2 };
+let runtime = new DockerRuntime(config), hold = 'dbc-fixture-hold-' + randomUUID();
+const inside = (id, code, ...args) => runtime.docker(['container', 'exec', runtime.names(id).container, 'node', '--input-type=module', '-e', code, ...args]);
+const marker = id => inside(id, "import{readFileSync}from'node:fs';process.stdout.write(readFileSync('/data/marker')); ");
+try {
+  const run = runtime.docker.bind(runtime); let interrupted = false;
+  runtime.docker = async args => { const result = await run(args); if (!interrupted && args[0] === 'container' && args[1] === 'create') { interrupted = true; throw new Error('fixture interruption after Docker created resource'); } return result; };
+  await assert.rejects(runtime.start(ids[0]));
+  runtime.docker = run;
+  assert.equal((await runtime.status(ids[0])).state, 'stopped');
+  for (const [i, id] of ids.entries()) { await runtime.start(id); await inside(id, "import{writeFileSync}from'node:fs';writeFileSync('/data/marker',process.argv[1]);", String(i)); }
+  runtime.healthTimeoutMs = 0;
+  await assert.rejects(runtime.start(ids[0]), { code: 'instance_health_timeout' });
+  assert.equal((await runtime.status(ids[0])).state, 'stopped'); runtime.healthTimeoutMs = 90000;
+  await runtime.start(ids[0]);
+  runtime.close(); runtime = new DockerRuntime(config); await runtime.recover();
+  assert.equal((await runtime.status(ids[0])).state, 'stopped');
+  await runtime.start(ids[0]); await runtime.start(ids[1]);
+  await runtime.stop(ids[0]);
+  const request = randomUUID(), snapshot = await runtime.backups.create(ids[0], request);
+  assert.equal((await runtime.backups.create(ids[0], request)).id, snapshot.id);
+  assert.throws(() => runtime.backups.get(ids[1], snapshot.id), { code: 'backup_not_found' });
+  assert.equal(readFileSync(runtime.backups.path(snapshot.id)).includes(Buffer.from('/data/marker')), false);
+  await runtime.start(ids[0]); await inside(ids[0], "import{writeFileSync}from'node:fs';writeFileSync('/data/marker','changed');");
+  await runtime.stop(ids[0]); await runtime.backups.restore(ids[0], snapshot.id); await runtime.start(ids[0]);
+  assert.equal(await marker(ids[0]), '0'); assert.equal(await marker(ids[1]), '1');
+  const encrypted = readFileSync(runtime.backups.path(snapshot.id)); encrypted[20] ^= 1; writeFileSync(runtime.backups.path(snapshot.id), encrypted);
+  await runtime.stop(ids[0]); await assert.rejects(runtime.backups.restore(ids[0], snapshot.id)); await runtime.start(ids[0]);
+  assert.equal(await marker(ids[0]), '0');
+  await runtime.stop(ids[0]);
+  const clean = await runtime.backups.create(ids[0], randomUUID());
+  const finish = runtime.backups.finishRestore.bind(runtime.backups), restoreKey = randomUUID();
+  runtime.backups.finishRestore = () => { throw new Error('fixture interruption before restore commit'); };
+  await assert.rejects(runtime.backups.restore(ids[0], clean.id, restoreKey));
+  runtime.backups.finishRestore = finish;
+  runtime.close(); runtime = new DockerRuntime(config);
+  await runtime.start(ids[0]); assert.equal(await marker(ids[0]), '0'); await runtime.stop(ids[0]);
+  await runtime.backups.restore(ids[0], clean.id, restoreKey);
+  await runtime.backups.create(ids[0], randomUUID());
+  await assert.rejects(runtime.backups.create(ids[0], randomUUID()), { code: 'backup_limit_reached' });
+  await runtime.backups.automatic(ids[0], 86400000);
+  assert.equal(runtime.backups.list(ids[0]).length, 3);
+  assert.equal(runtime.backups.due(ids[0], 86400000), false);
+  await runtime.start(ids[0]);
+  await runtime.docker(['container', 'create', '--name', hold, '--user', '1001:1001', '--network', 'none', '--mount', `type=volume,src=${runtime.names(ids[0]).volume},dst=/data`, '--entrypoint', 'node', runtime.image, '-e', 'setInterval(()=>{},1000)']);
+  await runtime.docker(['container', 'start', hold]);
+  await assert.rejects(runtime.purge(ids[0]));
+  assert.ok(await runtime.inspect('volume', runtime.names(ids[0]).volume)); assert.ok(existsSync(runtime.disks.path(ids[0])));
+  await runtime.docker(['container', 'rm', '-f', hold]); hold = null;
+  await runtime.purge(ids[0]); assert.equal(existsSync(runtime.disks.path(ids[0])), false); assert.deepEqual(runtime.backups.list(ids[0]), []);
+  assert.equal(await marker(ids[1]), '1');
+  console.log(JSON.stringify({ result: 'recovery_backups_fixture_passed', actualLinuxContainers: true, interruptedCreateRecovery: true, healthTimeoutStopsRuntime: true, agentRecoveryFencesOldRuntimes: true, encryptedSnapshot: true, idempotentSnapshot: true, restorePersistence: true, interruptedRestoreRecovered: true, corruptBackupPreservesData: true, crossUserBackupDenied: true, automaticBackupRotation: true, busyVolumeDeletionFailureRetried: true, purgeDeletesBackups: true, otherUserUnaffected: true }));
+} finally {
+  if (hold && await runtime.inspect('container', hold)) await runtime.docker(['container', 'rm', '-f', hold]);
+  const results = await Promise.allSettled(ids.map(id => runtime.purge(id))); runtime.close();
+  if (results.every(r => r.status === 'fulfilled')) await rm(dir, { recursive: true, force: true });
+  else throw new Error('cleanup incomplete; preserve private fixture state: ' + dir);
+}

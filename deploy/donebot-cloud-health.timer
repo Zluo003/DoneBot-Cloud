@@ -1,0 +1,10 @@
+[Unit]
+Description=Check DoneBot Cloud node readiness every 30 seconds
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=30
+Unit=donebot-cloud-health.service
+
+[Install]
+WantedBy=timers.target

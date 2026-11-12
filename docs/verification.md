@@ -1,0 +1,226 @@
+# 隔离验证记录
+
+日期：2026-11-11 至 2026-11-12。功能及资源变更验证均使用临时目录、随机合成账户/令牌、隔离 DoneBot fixture 或测试私有 PostgreSQL。用户明确提供的测试账号仅用于线上登录及只读身份接口核对，没有变更实际余额、用户应用或已有实例；凭据和令牌未落盘。
+
+## 已通过
+
+| 验证 | 结果与证明范围 |
+| --- | --- |
+| `npm test` | 9 项通过：两用户归属、HTTP/WS、伪造头、并发幂等、余额不足、退款、停启/撤销、会话续建、租约失效、备份确认与授权到期不重启、agent 退出停机、worker readiness。运行时为合成实现 |
+| `npm run verify:donebot` | 两个真实 DoneBot 进程，fake engine 回复、原生配对/会话校验、HTTP 跨归属拒绝、聊天/文件/记忆/profile 停启持久化及 Cloud 重启恢复 |
+| Go Cloud 测试（integration） | 13 项顶层测试通过，真实临时 PostgreSQL 迁移 260–263；扣退费、余额不足、月末、双节点/代次/租约、回收重试、中断恢复、续费/删除互斥、网页/原生客户端协议、独立安装凭据及节点令牌轮换撤销 |
+| Go 主控 + 两个 Node worker | HTTP/WS 经主控→worker→agent→合成运行时；按容量分配两个节点、并发只扣一次、worker 重启、到期断连/停机、7 天内保留、删除失败重试、另一用户数据保留 |
+| Go 相关包 | cloudbilling、handler、admin handler、server/routes、cmd/server 通过；节点路由与用户 JWT 路由鉴权分离测试通过 |
+| 网关前端 | 类型检查通过；CloudPanel、DoneBotView、DoneBot API 相关 11 项测试及修改文件 ESLint 通过 |
+| 网关 Cloud 前端最终回归 | vue-tsc、临时目录 Vite 生产构建及 8 文件 69 项测试通过：CloudView/CloudStorage/CloudPanel、DoneBotView/API、退出/侧栏/路由；含收费确认、取消后重新扣款确认、备份与节点令牌确认。构建保留既有 Browserslist、动态导入/chunk 和 shell 弃用提示 |
+| 浏览器 HTTP/WS 会话 | 一次性开门码并发只有一次成功，跨实例/Origin/UA/IP、过期码及过期 Cookie 拒绝；生产 Secure/HttpOnly/host-only/SameSiteStrict，数据库摘要/加密存储；撤销和到期关闭已有 WS |
+| 真实 DoneBot 网页 | 私有 PostgreSQL + 两 worker + 两真实 DoneBot fake-engine 进程：网页/静态资源、原生 session/SSE、私有记忆；Chrome 双用户页面、甲聊天不出现在乙、fragment 清除、Cookie 脚本不可读、撤销后自有会话结束页 |
+| 真实网关控制台联合流程 | 真实登录处理器/JWT、私有 PostgreSQL、miniredis、双 worker/agent 和真实 DoneBot 进程；Chrome 登录/开通、独立聊天、停启不重复扣费、到期停机拒绝访问、同实例续费恢复及超期删除通过；甲 2 笔、乙 1 笔、余额不足账户 0 笔合成扣款 |
+| DoneBot 前端 | 会话/服务开关 24 项测试、修改文件 oxlint、前端 TypeScript 和临时目录 Vite 构建通过；构建仍有既有 CSS/第三方注释/chunk 大小提示 |
+| 真实 Linux Docker | 一次性 Debian 13 ARM64 VM 内，从核对过的 DoneBot 提交构建 server 镜像，两个真实容器的原生鉴权、配置、网络 namespace、卷不可见、无控制 socket/密钥、持久化和定向回收通过 |
+| 真实 Linux 受控出网 | 两个真实容器的公网 HTTPS/DNS、网关匿名 401；跨租户、宿主机私网/公网、元数据、额外公网拒绝列表、非允许 TCP/UDP、IPv6、IPv4 映射、重绑定及外部主动连接被拒绝；防火墙不可用时禁止创建、失败原子更新、属主冲突保留、agent 对象重建和定向网络删除通过 |
+| 自动模型凭据 | 真实 PostgreSQL、双 worker、两个真实 DoneBot fake-engine 进程及合成网关：安装 ID/用户分离、免二次登录、无用户 JWT/密码、合成模型回复；新镜像也验证只读 Cloud 凭据恢复及公开状态无 key |
+| Linux 存储、备份及恢复 | 硬配额 ENOSPC、另一用户可写、空间回收、格式化中断；AES-GCM 快照、幂等、损坏不覆盖、提交中断恢复、轮换、卷忙删除失败后重试、回收清除备份 |
+| Linux 原生浏览器 | 新镜像，两容器 Browser SSE/画面/HTTPS 导航、独立 Chrome 资料和 localStorage 停启保留、跨实例 viewer 拒绝。离线生成合成 Bot，不调用真实模型 |
+| Linux socket 边界 | 固定真实 socket inode、HTTP/WS 禁连接池；替换路径为宿主服务 symlink 被拒，已固定 socket 不跳转，凭据探测也固定 inode，宿主 canary 从未收到请求 |
+| Linux systemd 与升级 | agent/维护 flock 互斥；systemd root 挂载对 Docker 可见；强杀 agent 后 ExecStopPost 停机保留数据；运行中拒绝升级，显式停机换镜像保留卷且可重复准备 |
+| Linux VM 重启 | 真正停止并启动同一专属 VM，boot ID 改变；Docker restart=no、ext4 重新挂载，两用户标记保留及定向回收 |
+| 线上身份只读核对 | 测试账号 login / auth/me 成功；DoneBot account / Cloud instances 为 404，logout 为 502。未验证线上 Cloud 主控或声称退出成功，未调用扣费/续期/资源变更 |
+| npm 依赖 | `ws` 锁定依赖版本为 8.22.2；审计 0 漏洞 |
+
+真实 DoneBot fixture 的本轮日志（仅本机临时证据目录，日志不加入仓库）：
+
+```text
+/var/folders/wf/gs6jc_rd4qd_6_1jmqjkg1jh0000gn/T/donebot-verification-evidence/server-1794415096836-38167.log
+/var/folders/wf/gs6jc_rd4qd_6_1jmqjkg1jh0000gn/T/donebot-verification-evidence/server-1794415098726-38167.log
+```
+
+真实 DoneBot 测试使用既有 `scripts/control-omb.ts` 隔离启动器的导出接口，独立临时 home/data、空闲端口、fake engine，不启动本机正在使用的 DoneBot。该测试没有验证真实模型计费、互联网、桌面、Linux namespace 或生产 JWT 登录。
+
+Go 集成 fixture 使用 `initdb` 创建临时集群，仅监听专有目录内的 Unix socket，拒绝外部 DSN；最小合成 users 表加真实 Cloud 迁移。测试通过 stdin 向 Node 传递随机配置，不写凭据文件。主控“重启”验证为同数据库重新构造 Service，worker 为重新创建 worker 对象；不是整机掉电测试。
+
+## 复现命令
+
+Cloud 工程：
+
+```sh
+npm ci
+npm test
+npm run verify:donebot
+```
+
+相邻 donebot-api/backend，需 Node 24 及本机 PostgreSQL 的 `initdb` / `pg_ctl`，以非 root 用户运行：
+
+```sh
+CLOUD_BILLING_PG_FIXTURE=1 CLOUD_BILLING_NODE_FIXTURE=1 go test -tags integration ./internal/cloudbilling -v
+go test ./internal/cloudbilling ./internal/handler/... ./internal/server/routes ./cmd/server
+```
+
+相邻 donebot-api/frontend：
+
+```sh
+pnpm exec vue-tsc --noEmit
+pnpm exec vitest run src/components/admin/donebot/__tests__/CloudPanel.spec.ts src/components/admin/donebot/__tests__/DoneBotView.spec.ts src/api/admin/__tests__/donebot.spec.ts
+pnpm exec eslint src/components/admin/donebot/CloudPanel.vue src/components/admin/donebot/__tests__/CloudPanel.spec.ts src/components/admin/donebot/__tests__/DoneBotView.spec.ts src/views/admin/DoneBotView.vue src/api/admin/donebot.ts
+pnpm exec vitest run src/views/user/__tests__/CloudView.spec.ts src/api/__tests__/cloud-logout.spec.ts src/components/layout/__tests__/AppSidebar.spec.ts src/router/__tests__/guards.spec.ts
+```
+
+浏览器验证先在相邻 DoneBot 将真实前端构建到本次拥有的临时目录，再在 donebot-api/backend 运行：
+
+```sh
+# 在 DoneBot 中
+pnpm exec vite build --outDir /tmp/dbc-browser-donebot-20261112 --emptyOutDir
+# 在 donebot-api/backend 中
+CLOUD_BILLING_PG_FIXTURE=1 CLOUD_BILLING_NODE_FIXTURE=1 \
+CLOUD_BILLING_BROWSER_FIXTURE=1 \
+CLOUD_DONEBOT_STATIC_DIR=/tmp/dbc-browser-donebot-20261112 \
+go test -tags integration ./internal/cloudbilling -v -count=1 -timeout=4m
+```
+
+此前 Chrome 复验使用 Playwright CLI 独立 `dbc-browser-20261112` session，打开同一 fixture 的合成控制页和两个真实 DoneBot 网页，没有访问生产登录、购买或模型接口。甲发送一条合成消息并收到 fake engine 回复，乙看不到甲消息；撤销后甲显示“Cloud 网页会话已结束”，返回链接指向自有控制台。顶层过期导航的主控重定向通过 HTTP 测试；当时人工 reload 到 fixture master 的 `/cloud` 为 401，因为合成主控没有生产 Vue 页面，该旧记录不能当成完整控制台浏览器验收。fixture 的 PG/DoneBot 进程、临时 home/data 已清理，独立浏览器 session 已关闭。机器可读结果见 [浏览器证据](verification/browser-2026-11-12.json)。本次增加的真实登录和 Vue 控制台验证另记如下。
+
+## 真实网关登录与用户控制台联合验收
+
+`TestCloudConsoleJourney` 启动本次专有 Unix socket PostgreSQL、miniredis 与回环 HTTPS，运行真实 `AuthHandler` 登录/身份/刷新/退出、JWT middleware、Cloud handlers/Service，以及迁移 108、260–263。用户表来自真实 ent schema；fixture 用户 repository 从合成行读取身份和余额，头像/身份列表、公共设置及无关控制台元数据使用合成响应。没有接入支付平台或生产用户。
+
+两个真实 Node worker/agent 启动 DoneBot 既有隔离 launcher，使用独立临时 home/data、真实前端与 fake engine。网关和 DoneBot 的生产前端构建都输出到本次临时目录，不覆盖工作区 dist。Playwright CLI 的三个独立 Chrome session 从真实登录页进入 `/cloud`，网页网络访问限制在回环测试域名。
+
+甲、乙分别确认开通并进入各自子域名，只能看到自己的聊天标记；一次性开门码清除。甲停机后启动，扣费仍为 1 笔；推进其合成订阅到期并置零余额后，主控拒绝访问（HTTP 403）、节点停机，页面禁止打开。向该合成账户补足余额，worker 自动续费，累计 2 笔扣费，原实例 ID、节点和聊天标记保留。再推进至到期 8 天，实际 fixture home 被回收，控制台重新显示开通入口；乙仍运行、只有 1 笔扣费且聊天标记保留。第三账户先遇到容量不足，释放名额后从页面重试，明确显示余额不足、未开通未扣款，累计扣款为 0。
+
+联合验收修复了两个缺陷：异步开通返回 202 但操作已失败时，页面不再显示受理成功，并提供重新确认的重试；余额不足持久错误使用明确代码。Gin 未匹配路由默认 404 会污染实例域名的开门页/交换响应，实例域名 middleware 现在先重置状态；开门页、客户端配对页、描述符、交换错误及非实例域名的 6 个回归场景通过。
+
+真实浏览器 hold 验收 `TestCloudConsoleJourney` 通过（689.56 秒），其最终断言核对扣费、甲删除、乙运行和实际 purge。收尾后自动模式与 middleware 回归再跑通过（包耗时 6.273 秒）；相关 Go 普通包、CloudView 7 项测试、vue-tsc、改动文件 ESLint 与临时前端构建通过。浏览器日志含自签名测试证书的握手拒绝、被拦截的外部 SDK 和停机/导航时流中断；不声称浏览器控制台零错误或生产 TLS 已验收。
+
+复现自动流程：先在相邻前端仓库分别构建，再在网关 backend 执行（环境变量仅为本次空目录路径，不含凭据）：
+
+```sh
+# 创建独占临时输出目录，以下三段在同一终端依次执行
+console_build_dir=$(mktemp -d /tmp/dbc-console-build.XXXXXX)
+(cd ../donebot-api/frontend && pnpm exec vite build --outDir "$console_build_dir/gateway" --emptyOutDir)
+(cd ../DoneBot && pnpm exec vite build --outDir "$console_build_dir/donebot" --emptyOutDir)
+(cd ../donebot-api/backend && CLOUD_CONSOLE_FIXTURE=1 \
+  CLOUD_CONSOLE_STATIC_DIR="$console_build_dir/gateway" \
+  CLOUD_DONEBOT_STATIC_DIR="$console_build_dir/donebot" \
+  go test -tags integration ./internal/handler \
+  -run '^(TestCloudConsoleJourney|TestCloudBrowserMiddlewareResetsUnmatchedRouteStatus)$' \
+  -count=1 -timeout=4m)
+```
+
+人工 Chrome 联合验收另加 `CLOUD_CONSOLE_UI_HOLD=1` 和 `-timeout=26m`，按终端临时账户完成上述页面操作；只在本次回环 fixture 使用测试证书例外。测试控制入口的时间/余额操作仅限随机控制凭据保护的专有数据库。测试不会读取外部 DSN。hold 模式需要完成甲续费/删除、乙开通和余额不足场景后发送本次 `finish`；自动模式无需浏览器操作。结束时清理本次 PostgreSQL、worker、agent、DoneBot 临时目录和独立浏览器会话。
+
+机器可读结果及截图摘要见 [console JSON](verification/console-2026-11-12.json)。本次是 macOS 进程与 Chrome 联合验收，不包含 Linux 容器、桌面 GUI、真实模型计费或生产 DNS/TLS；这些范围不能与其他独立证据拼接为一次完整生产验收。发布候选固定和回退步骤见 [发布说明](release-runbook.md)。
+
+## 真实 Linux Docker：已通过基础检查
+
+之前 `cloud-images.ubuntu.com` DNS 失败，并非所有 Linux 镜像源不可用。本轮改用 [Debian 官方云镜像](https://cloud.debian.org/images/cloud/trixie/20261103-2651/)，下载约 338 MB 的 ARM64 qcow2，使用 Lima 2.3.0 模板自带 SHA-512 校验成功；清华 Ubuntu 镜像目录也实测可达，未下载该源的镜像。
+
+环境：Debian 13.7 / ARM64，内核 `6.12.115+deb13.1-cloud-arm64`，Docker `26.1.5+dfsg1`，Node `v24.18.0`，VM 4 CPU / 6 GiB 内存。未启动用户 Docker Desktop，未挂载主目录或用户应用数据，未改变宿主机 Docker context、DNS 或代理配置。
+
+DoneBot 从 `b16912e0481e8cbab749d75ef0ccccb32247d7b8` 的 git archive 构建现有 `server` target，没有包含工作区的其他未提交修改。构建得到的本地不可变 image ID：
+
+```text
+sha256:56a809052c8067e1e3f3793c7d50acb3f3fdd61f94ec5536c4e5c102dd4728c5
+```
+
+`verify:linux` 已实跑通过：不同网络 namespace、另一用户卷路径不可见、无 Docker socket/控制密钥、网络拒绝、原生会话、停启持久化及定向删除；另一用户标记文件保留。结果与版本记录在 [JSON 证据](verification/linux-2026-11-12.json)。测试容器、卷和其私有状态目录已清理，专用 VM 停机后保留构建缓存，便于后续隔离验证。
+
+可复现 VM 模板为 `deploy/linux-fixture.yaml`，适用于 Apple Silicon 上的 Lima VZ。该模板不挂载宿主机目录，并禁止应用端口自动转发；进入 VM 通过显式复制源码准备 Node 24 和镜像，不依赖原机数据：
+
+```sh
+limactl start --name=donebot-cloud-fixture-20261112 --mount-none --tty=false deploy/linux-fixture.yaml
+```
+
+VM 内的验证命令（需 root 管理 Docker 和设置 IPC 目录属主）：
+
+```sh
+sudo env CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$REVIEWED_DONEBOT_IMAGE_DIGEST" node scripts/verify-linux.mjs
+sudo env CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$REVIEWED_DONEBOT_IMAGE_DIGEST" node scripts/verify-egress.mjs
+```
+
+如果原源下载失败，可换 Debian 官方镜像、可信发行版镜像站，或在其他网络下载同一文件、校验摘要后作为本地镜像导入；不必修改宿主机全局 DNS 或接管现有应用。要换成不同镜像内容，必须同步取得可信的新摘要，不能直接取消校验。
+
+脚本只创建/删除本次部署 UUID 与实例 UUID 标记的容器/卷/网络和本次精确拥有的 namespace、veth、地址/路由及 nft 表。清理失败会保留私有状态供恢复，不宽泛删容器。上述旧镜像记录仅证明当次基础边界；后续新镜像、配额、备份、重启、systemd 与浏览器证据单独记录如下，不能反向扩大旧记录范围。
+
+## 受控出网：已通过真实网络检查
+
+`verify:egress` 在同一专用 VM 内使用两个真实 DoneBot 容器和各自专属 bridge，安装本部署独占的 nftables 规则。公网 `example.com` HTTPS 返回 200，未携带凭据的 `https://donebot.cn/api/v1/auth/me` 返回 401；没有调用模型或余额接口。
+
+合成目标运行于本次专属 network namespace，提供可用的 HTTP 80/443、非允许 TCP 端口和 UDP 回声服务。目标地址通过 VM 内精确路由到达，包括模拟私网/元数据及公网形态地址。受信宿主机先确认这些服务可用，再从租户执行负向访问；测试不会向合成公网地址的实际归属方发包。跨租户目标也启动真实监听并验证自身回环可达。
+
+两用户跨网络、宿主机私网/公网、元数据、额外公网拒绝列表、非允许 TCP/UDP、IPv6、IPv4 映射、DNS 重绑定和外部主动连接全部被拒绝。缺少 nft 时容器/网络/卷均未创建；相同表名的不同属主不会被覆盖；故意失败的 nft 事务保留旧隔离。重建 DockerRuntime 对象可恢复原实例，删除一个网络后另一实例仍可联网并保持隔离。此“重建”是同一内核内的新对象，不代表系统掉电恢复。
+
+网络证据及版本记录见 [JSON 证据](verification/egress-2026-11-12.json)，实现范围见 [网络边界](network-isolation.md)。测试结束已核对没有遗留测试容器、卷、bridge、专属 nft 表、network namespace 或合成路由。
+
+## 证据限制
+
+- 默认 `network=none` 完全禁网；显式 `public-web` 的公网 Web/DNS 和原生浏览器已验证，其他内核/防火墙后端尚未验收。规则依赖受信宿主机保留本部署 nft 表。
+- 硬磁盘配额已实现和验证；节点 capacity 仍是配置名额，没有目标服务器硬件承载量实测。
+- 原网关 logout 不保证立即撤销已签发 JWT，见接口核对。Cloud 会话支持独立撤销，但退出时若网关离线，旧 Cookie 可能有效至到期。模型安装凭据已独立接入，网页 Cookie 与安装 key 不能互作授权。
+- 实例运行与访问授权分开：访问到期拒绝，实际停机/删除取决于节点在线、agent 和 Docker。失败不能当成删除成功。
+- DoneBot 修改涵盖前端、统一网关接入、验证工具及另获明确授权的仅 Cloud 模式桌面适配；没有迁移现有用户目录或部署生产。
+- 原生客户端协议与真实网关登录/开通页面 Chrome 联合流程已通过；打包 GUI 仍待验收。浏览器流程使用合成账户、余额和模型，不能替代生产支付与模型验收。
+- 模型请求使用合成网关；没有真实模型计费或生产异步媒体验收。独立 Linux 桌面已获明确授权并接入，见 [具体范围和限制](desktop-adapter-proposal.md)。
+- 备份是本节点本地加密快照，没有异地灾备；readiness/timer 没有外部告警投递。
+
+## 后续运行验证：新镜像、存储和恢复
+
+新镜像基于 DoneBot `b61d71ac5004c55c4ca8765a222f40344b95ae6b` 工作区，包含本轮前端及网关安装凭据接入，不包含原版桌面修改。使用现有 Dockerfile `server` target、验证构建 `ENGINES=`，不等同于生产完整模型 CLI 镜像。源码包 SHA-256：`55d10e6cfdbccd3c5cc19583675829a3344855b8d6e0ad4480c88f7b23cc77e3`；得到不可变本地 image ID：
+
+```text
+sha256:a3902c61fead7edb0abd8d338860012ae2ade4c05b04ccaa413da2ec45395cd9
+```
+
+模型免登录验证使用 macOS 隔离 DoneBot 进程及合成安装服务/模型请求；Linux 新镜像另验证安装凭据读取和两用户身份分离，不能称为 Linux 生产模型计费闭环。机器可读汇总见 [runtime JSON](verification/runtime-2026-11-12.json)。
+
+在一次性 VM 内以 root 运行，下面 digest 使用经核对的新镜像：
+
+```sh
+sudo env CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$REVIEWED_DONEBOT_IMAGE_DIGEST" npm run verify:storage
+sudo env CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$REVIEWED_DONEBOT_IMAGE_DIGEST" npm run verify:recovery
+sudo env CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$REVIEWED_DONEBOT_IMAGE_DIGEST" npm run verify:socket
+sudo env CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$REVIEWED_DONEBOT_IMAGE_DIGEST" npm run verify:service
+sudo env CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$PREVIOUS_DONEBOT_IMAGE_DIGEST" CLOUD_UPGRADE_IMAGE="$REVIEWED_DONEBOT_IMAGE_DIGEST" npm run verify:upgrade
+```
+
+`verify:service` 以随机专属 transient systemd unit 启动真实生产 agent，注入合成安装 key，检查私有挂载和 ready 后强制终止 main，等待 ExecStopPost 定向停机。fixture 不启用公网出口，不接触真实网关。`verify:recovery` 覆盖快照 restore 提交前注入中断，然后重建 runtime 完成恢复；自动备份先成功新建再轮换，损坏快照不会覆盖当前数据。
+
+浏览器需要从 DoneBot 既有隔离启动器导出一个不含凭据的合成 Bot registry，在宿主机执行：
+
+```sh
+node scripts/browser-seed.mjs /tmp/dbc-browser-seed-UNIQUE.json
+```
+
+精确复制该文件到专属 VM，再执行：
+
+```sh
+sudo env CLOUD_DISPOSABLE_LINUX=1 CLOUD_BROWSER_SEED_FILE=/var/tmp/dbc-browser-seed-UNIQUE.json CLOUD_DONEBOT_IMAGE="$REVIEWED_DONEBOT_IMAGE_DIGEST" npm run verify:browser
+```
+
+它在停机的本次专属卷中写入合成 registry，然后通过 agent 转发原生 Browser API，接收 SSE/帧、导航公网 HTTPS；仅在本用户容器内部用其私有 CDP 检查 localStorage。没有对外暴露 CDP 端口，没有借此声称真实模型驱动的桌面操作已通过。
+
+VM 重启脚本分 `prepare`、`verify` 两步，状态目录必须用专属 `/var/tmp/dbc-reboot-*`（生产使用 `/var/lib`）；`prepare` 输出需要保留的精确目录，停止/启动本次 VM 后将同目录传给 `verify`。真实 boot ID 改变才通过，不能以重建 Node 对象代替。初次将 fixture 放 `/tmp` 遇到系统开机清理，已定向清理那次资源，改为 `/var/tmp` 后重新验证通过。
+
+新镜像最终复验同样完成实际 VM 停启；`verify:linux`、`verify:storage` 和 `verify:egress` 也在新镜像重新通过。原有旧镜像 JSON 保留，新增汇总不替换其原始证据。最终已核对本部署测试容器、卷、网络、namespace、专属 nft 表和 loop 挂载无残留；Docker 自身 nat/filter 表保留，专属 VM 已停止并保留镜像缓存。
+
+
+## 专属桌面与双盘备份
+
+本会话收到用户对 Cloud 桌面适配的明确授权后，增加专属 Unix socket 适配并复用 DoneBot 原版桌面镜像及 CUA MCP。旧 runtime JSON 记录的是该授权前的状态，保持不改；最新结果单独存入 `verification/desktop-2026-11-12.json`。
+
+在同一专属 Debian VM 中以 root、合成内容执行：
+
+```sh
+sudo env CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$REVIEWED_DONEBOT_IMAGE_DIGEST" CLOUD_DESKTOP_IMAGE="$REVIEWED_DESKTOP_IMAGE_DIGEST" npm run verify:desktop
+```
+
+脚本创建两个真实 DoneBot 服务和各自桌面，运行盘 256 MiB、桌面盘 512 MiB，使用独立网络。通过原 Computer 状态/截图与查看 WebSocket、打包后的原 `container-mcp.js` 调用 CUA `get_desktop_state`，另外验证 UID 1000 命令及限额文件下载。桌面保留期不是月付时间模拟：脚本使用真实短期运行租约，停止续租后查看断开且两类容器停止，另一用户仍能恢复自己的数据。
+
+双盘备份先保存合成标记，再修改两盘；损坏桌面加密文件时运行盘也不能被覆盖。幂等恢复后两盘回到原标记；在只完成运行盘替换的持久提交点注入中断，关闭并重建 agent/runtime，再启动完成桌面盘替换。桌面显式镜像替换只移除停机容器、保留资料盘，重复准备无副作用。空闲、订阅停机和定向删除均验证资源结果。
+
+DoneBot 相关 9 个单元测试文件共 254 项通过，覆盖本地桌面、查看、原 MCP 控制门、附件和新 Cloud 适配；服务端与前端类型检查、改动文件 lint 通过。网关资源页补充桌面限额与双盘恢复提示，其类型检查、组件测试、生产构建和相关 Go 包检查通过。单元测试与 API/字节流检查不替代打包 Electron Computer 面板、真实模型聊天附件交付或完整安全审计。
+
+完全禁网的额外检查发现 VNC 在 Docker `network=none` 下无法解析自动容器主机名；适配已固定桌面主机名及容器内回环映射，未修改宿主 DNS。随后重新验证禁网启动与真实 VM 停启，结果记录在桌面 JSON 中。
+
+双盘自动备份另以 `verify:backup-groups` 验证：两个真实 128 MiB ext4 文件系统，首次桌面快照失败后按原键恢复、无重复快照，连续轮换只保留三组，淘汰组的两份文件均删除，保留组可恢复两盘不同标记。该脚本不启动桌面容器，不替代上述完整桌面验证。备份认证失败时也会清理尚未提交的临时恢复盘。
+
+本轮机器可读结果见 [desktop JSON](verification/desktop-2026-11-12.json)，其中分别记录最后桌面镜像验证和禁网 VM 重启所用运行镜像。

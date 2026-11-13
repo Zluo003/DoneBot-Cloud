@@ -16,7 +16,7 @@ const localCodes = new Set([
   'agent_timeout', 'agent_failed', 'agent_closing', 'instance_not_ready', 'docker_failed', 'docker_timeout',
   'docker_resource_missing', 'resource_ownership_mismatch', 'resource_spec_mismatch', 'network_spec_mismatch',
   'storage_spec_mismatch', 'storage_ownership_mismatch', 'storage_mount_ownership_mismatch', 'storage_mount_failed',
-  'storage_setup_failed', 'host_storage_insufficient', 'runtime_health_timeout',
+  'egress_firewall_failed', 'storage_setup_failed', 'host_storage_insufficient', 'runtime_health_timeout',
 ]);
 
 export function masterFailure(res, result) {

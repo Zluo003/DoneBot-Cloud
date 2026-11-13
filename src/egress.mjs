@@ -2,6 +2,9 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { isIPv4 } from 'node:net';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Fault, instanceID } from './common.mjs';
 
 const execute = promisify(execFile);
@@ -31,11 +34,19 @@ export class Egress {
   }
   bridge(id) { instanceID(id); return 'dbc' + createHash('sha256').update(`${this.namespace}:${id}`).digest('hex').slice(0, 12); }
   async nft(args, input) {
+    let directory;
     try {
-      const result = execute(this.binary, args, { timeout: 10000, maxBuffer: 1024 * 1024, env: { PATH: '/usr/sbin:/usr/bin:/sbin:/bin' } });
-      if (input !== undefined) { result.child.stdin.on('error', () => {}); result.child.stdin.end(input); }
-      await result;
+      if (input !== undefined) {
+        if (args.at(-2) !== '-f' || args.at(-1) !== '-') throw new Error('rules require a file argument');
+        // nftables 1.0.9 rejects Node's socket-backed child stdin as a non-regular file.
+        directory = await mkdtemp(join(tmpdir(), 'dbc-nft-'));
+        const path = join(directory, 'rules.nft');
+        await writeFile(path, input, { mode: 0o600, flag: 'wx' });
+        args = [...args.slice(0, -1), path];
+      }
+      await execute(this.binary, args, { timeout: 10000, maxBuffer: 1024 * 1024, env: { PATH: '/usr/sbin:/usr/bin:/sbin:/bin' } });
     } catch { throw new Fault(503, 'egress_firewall_failed'); }
+    finally { if (directory) await rm(directory, { recursive: true, force: true }); }
   }
   rules(bridges) {
     return `table inet ${this.table} {

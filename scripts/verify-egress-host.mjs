@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import { Egress } from '../src/egress.mjs';
 import { Store } from '../src/store.mjs';
 
@@ -28,10 +29,9 @@ try {
     } catch (failure) { diagnostic[key] = (failure.stderr || failure.code || '').slice(0, 3000); }
   }
   try {
-    const check = execute(egress.binary, ['--check', '-f', '-']);
-    check.child.stdin.on('error', () => {});
-    check.child.stdin.end(`${diagnostic.full_table?.name ? `delete table inet ${egress.table}\n` : ''}${egress.rules(ids.map(id => egress.bridge(id)))}\n`);
-    await check;
+    const path = join(dir, 'rules-check.nft');
+    await writeFile(path, `${diagnostic.full_table?.name ? `delete table inet ${egress.table}\n` : ''}${egress.rules(ids.map(id => egress.bridge(id)))}\n`, { mode: 0o600, flag: 'wx' });
+    await execute(egress.binary, ['--check', '-f', path]);
     diagnostic.rules_check = 'passed';
   } catch (failure) { diagnostic.rules_check = (failure.stderr || failure.code || '').slice(0, 5000); }
   console.error(JSON.stringify(diagnostic));

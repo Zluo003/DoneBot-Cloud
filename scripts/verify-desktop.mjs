@@ -23,6 +23,7 @@ const desk = (id, path, value) => socketJSON(join(runtime.names(id).edge, 'cloud
 const inside = (id, code, ...args) => runtime.docker(['container', 'exec', runtime.names(id).container, 'node', '--input-type=module', '-e', code, ...args]);
 async function until(check, label) { for (let i = 0; i < 150; i++) { if (await check()) return; await new Promise(r => setTimeout(r, 100)); } throw new Error('timeout: ' + label); }
 const clients = [];
+let phase = 'start-first-user';
 const proxy = (id, path, value) => new Promise((resolve, reject) => {
   const req = request({ socketPath: socket, path: `/v1/instances/${id}/proxy` + path, method: value === undefined ? 'GET' : 'POST', agent: false, headers: { 'x-cloud-origin': 'https://donebot.cn', 'content-type': 'application/json' }, timeout: 120000 }, res => {
     let text = ''; res.on('data', b => text += b); res.on('end', () => { try { const out = JSON.parse(text); if (res.statusCode >= 400) throw Object.assign(Error(JSON.stringify(out)), { status: res.statusCode }); resolve(out); } catch(e) { reject(e); } });
@@ -47,10 +48,13 @@ async function mcp(id) {
 }
 try {
   for (const [i, id] of ids.entries()) {
+    phase = `user-${i}-service-start`;
     await socketJSON(socket, `/v1/instances/${id}/start`, 'POST', { authorized_until: Date.now() + 20000 });
+    phase = `user-${i}-desktop-start`;
     assert.equal((await desk(id, '/status')).container, 'missing');
     await assert.rejects(desk(id, '/action', { action: 'run', instance_id: ids[1-i] }), { status: 400 });
     await desk(id, '/action', { action: 'run' });
+    phase = `user-${i}-desktop-access`;
     const native = await proxy(id, '/api/local-computer'); assert.equal(native.cloud_managed, true); assert.equal(native.ready, true);
     assert.match(native.viewer_url, /^\/desktop-viewer#/); assert.equal(native.commands.run, null);
     assert.equal((await desk(id, '/status')).ready, true);
@@ -63,6 +67,7 @@ try {
     assert.equal(await inside(id, "import{existsSync}from'node:fs';process.stdout.write(String(existsSync(process.argv[1])));", home.Mountpoint), 'false');
   }
   const a = ids[0], b = ids[1];
+  phase = 'cross-user-network';
   await desk(a, '/action', { action: 'start' });
   await runtime.docker(['container', 'exec', '-d', '-u', '1000:1000', runtime.desktops.names(b).container, '/opt/venv/bin/python', '-m', 'http.server', '80', '--bind', '0.0.0.0', '--directory', '/tmp']);
   await until(async () => { const localHTTP = await desk(b, '/exec', { command: "/opt/venv/bin/python -c \"import urllib.request; print(urllib.request.urlopen('http://127.0.0.1').status)\"" }); return localHTTP.stdout.trim() === '200'; }, 'fixture HTTP target');
@@ -71,6 +76,7 @@ try {
   assert.match((await proxy(a, '/api/local-computer/screenshot', {})).image, /^data:image\/png;base64,/);
   await proxy(a, '/api/local-computer/start', {});
   await mcp(a);
+  phase = 'desktop-file-and-viewer';
   const downloaded = await new Promise((resolve, reject) => {
     const req = request({ socketPath: join(runtime.names(a).edge, 'cloud-desktop.sock'), path: '/file', method: 'POST', agent: false, headers: { 'content-type': 'application/json' } }, res => { let text=''; res.on('data', b=>text+=b); res.on('end',()=> res.statusCode === 200 ? resolve(text) : reject(Error(text))); }); req.on('error',reject); req.end(JSON.stringify({ path: '/home/cua/workspace/marker.txt' }));
   }); assert.equal(downloaded, 'user0');
@@ -88,6 +94,7 @@ try {
   await socketJSON(socket, `/v1/instances/${a}/start`, 'POST', { authorized_until: Date.now() + 20000 }); await desk(a, '/action', { action: 'start' });
   await inside(a, "import{writeFileSync}from'node:fs';writeFileSync('/data/main-marker','before');");
   const key = randomUUID(); const snapshot = await proxy(a, '/api/cloud/backups', { request_key: key, confirm: true });
+  phase = 'combined-backup-restore';
   assert.equal((await proxy(a, '/api/cloud/backups', { request_key: key, confirm: true })).id, snapshot.id);
   await desk(a, '/action', { action: 'start' });
   await desk(a, '/exec', { command: 'printf after > marker.txt' });
@@ -106,6 +113,7 @@ try {
   await inside(a, "import{writeFileSync}from'node:fs';writeFileSync('/data/main-marker','interrupted');");
   await socketJSON(socket, `/v1/instances/${a}/stop`, 'POST', {});
   const interruptedKey = randomUUID();
+  phase = 'interrupted-restore-recovery';
   await runtime.backups.main.stageRestore(a, group.main, interruptedKey);
   await runtime.desktops.backups.stageRestore(a, group.desktop, interruptedKey);
   runtime.store.run("INSERT INTO instance_restores VALUES(?,?,?,'committing')", a, interruptedKey, snapshot.id);
@@ -116,6 +124,7 @@ try {
   assert.equal(await inside(a, "import{readFileSync}from'node:fs';process.stdout.write(readFileSync('/data/main-marker'));"), 'before');
   assert.equal((await desk(a, '/exec', { command: 'cat marker.txt' })).stdout, 'user0');
   runtime.desktops.idleMs = 2000;
+  phase = 'idle-stop-and-upgrade';
   await until(async () => (await desk(a, '/status')).container === 'stopped', 'idle desktop stop');
   runtime.desktops.idleMs = 30000;
   await socketJSON(socket, `/v1/instances/${a}/stop`, 'POST', {});
@@ -126,6 +135,7 @@ try {
   await socketJSON(socket, `/v1/instances/${a}/start`, 'POST', { authorized_until: Date.now() + 20000 });
   await desk(a, '/action', { action: 'start' }); assert.equal((await desk(a, '/exec', { command: 'cat marker.txt' })).stdout, 'user0');
   const expiring = new WebSocket(`ws+unix://${join(runtime.names(a).edge, 'cloud-desktop.sock')}:/websockify`); clients.push(expiring);
+  phase = 'lease-expiry-and-purge';
   const expiringRfb = once(expiring, 'message'); await once(expiring, 'open'); await expiringRfb;
   leaseIDs.delete(a); const expiredConnection = once(expiring, 'close');
   await socketJSON(socket, `/v1/instances/${a}/lease`, 'POST', { authorized_until: Date.now() + 1000 });
@@ -140,12 +150,14 @@ try {
   assert.equal(await runtime.inspect('volume', runtime.desktops.names(a).volume), null);
   console.log(JSON.stringify({ result: 'linux_desktop_fixture_passed', image: runtime.image, desktopImage: runtime.desktops.image, users: 2, actualDesktopContainers: true, nativeDoneBotStatus: true, nativeCUAFrame: true, originalMCPBridge: true, boundedFileDownload: true, executionUID1000: true, otherSocketAndVolumeDenied: true, crossDesktopNetworkDenied: true, stopStartPersistence: true, rawViewerWebSocket: true, nativeViewerWebSocket: true, runtimeLeaseExpiryStopsAndDisconnectsDesktop: true, subscriptionStopDisconnectsViewer: true, stoppedRuntimeRefusesDesktopAccess: true, combinedEncryptedBackups: true, corruptionRejectsBeforeEitherOverwrite: true, idempotentTwoDiskRestore: true, interruptedTwoDiskRestoreRecovered: true, explicitDesktopUpgradeRetainsHome: true, idleStop: true, purgeRemovesDesktopData: true }));
 } catch (error) {
-  console.error(JSON.stringify({ event: 'desktop_fixture_failed', code: error.code || 'unknown', name: error.name, frames: error.stack?.split('\n').filter(line => /^\s+at /.test(line)) }));
+  console.error(JSON.stringify({ event: 'desktop_fixture_failed', phase, code: error.code || 'unknown', name: error.name, frames: error.stack?.split('\n').filter(line => /^\s+at /.test(line)) }));
   for (const id of ids) {
     for (const [role, name] of [['service', runtime.names(id).container], ['desktop', runtime.desktops.names(id).container]]) {
       try {
         const value = await runtime.inspect('container', name);
-        console.error(JSON.stringify({ event: 'desktop_fixture_container', instance_id: id, role, state: value?.State?.Status, error: value?.State?.Error, exit_code: value?.State?.ExitCode }));
+        const h = value?.HostConfig;
+        console.error(JSON.stringify({ event: 'desktop_fixture_container', instance_id: id, role, state: value?.State?.Status, has_error: !!value?.State?.Error, exit_code: value?.State?.ExitCode, oom_killed: value?.State?.OOMKilled,
+          hostname: value?.Config?.Hostname, extra_hosts: h?.ExtraHosts, cap_add: h?.CapAdd, cap_drop: h?.CapDrop, security_opt: h?.SecurityOpt, tmpfs: h?.Tmpfs, ipc_mode: h?.IpcMode, cgroupns_mode: h?.CgroupnsMode, shm_size: h?.ShmSize }));
       } catch (failure) { console.error(JSON.stringify({ event: 'desktop_fixture_inspect_failed', instance_id: id, role, code: failure.code || 'unknown' })); }
     }
   }

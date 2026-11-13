@@ -281,3 +281,5 @@ worker 的新增回归明确验证业务 404 与无结构 HTTP 404 可区分，�
 用户随后自行将 DoneBot 仓库设为公开。只读核实后，重新运行原 Docker workflow 的 run `43370375981`（attempt 2，DoneBot 完整 SHA 仍为 `e9d24ff50f10e5772409089386f202e2b1813447`）。GitHub 托管的临时 amd64/arm64 runner 均实际执行了构建；arm64 构建与 server/UI/DuckDB/浏览器启动检查成功，amd64 的构建、server/UI、开源版、浏览器、服务回环监听和 server+Caddy 配对检查成功。后续原版 `cloud-home` 检查中的引擎列表断言返回 false，任务失败，发布 job skipped；没有将 CI 本地 image ID 称为已发布镜像。
 
 本仓库新增手动 `cloud-images.yml`，限定完整 DoneBot SHA 和 amd64/arm64 平台。它复用原版 Dockerfile/桌面生成器及已有 `verify:linux`、`verify:desktop`，所有验证完成后才执行 registry push；完成清单记录两个真实注册表摘要。新 workflow 的 YAML、各 bash 块及 actionlint 校验用于检查流程配置，不代替真实运行。此次未修改或推送 DoneBot 仓库代码。DoneBot-Cloud 当前仍为私有仓库，其 Actions 额度与 DoneBot 的公开状态分别判断。
+
+新流程已通过 actionlint 1.7.12、YAML 和 bash 语法检查，推送后触发了 [Cloud run 43383723725](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43383723725)，平台为 `linux/amd64`、DoneBot SHA 同上。job 的 steps 为空，GitHub annotation 明确为账户账单失败或需提高支出额度，尚未执行构建。没有绕过验证发布镜像，也没有自动公开 Cloud 仓库或修改账户计费。要继续执行需有可用私有 Actions 额度，或用户明确决定将该仓库公开后重跑。

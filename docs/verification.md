@@ -299,3 +299,16 @@ worker 的新增回归明确验证业务 404 与无结构 HTTP 404 可区分，�
 最终 [run 43387570590](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43387570590) 成功，Cloud SHA `7107d2690353319ef446fb7e43aa4815d9462202`。在临时 Ubuntu amd64 runner（kernel `7.0.0-1014-aws`、Docker 28.0.4、Node 24.18.0、nftables 1.0.9）完成两类真实镜像构建，以及 `verify:linux`、`verify:egress`、`verify:desktop`。桌面检查包含原 CUA/MCP、文件、WebSocket、跨用户网络和卷拒绝、停启持久化、双盘备份/损坏拒绝/幂等和中断恢复、空闲停机、升级保留、租约到期断连和定向删除。全部通过后才执行 GHCR push；没有跳过发布前检查。
 
 发布清单、三组原始 fixture 结果和匿名访问复核保存在 [images JSON](verification/images-2026-11-13.json)，对应 [固定节点配置](../deploy/images/2026-11-13-amd64.env)。匿名清单/配置读取返回 200，两个镜像共 34 层的匿名 HEAD 及长度检查通过；未在本机执行完整 Docker pull。注册表清单摘要、配置 image ID、平台及源码 revision 与被验证镜像一致；没有将本地 image ID 当作 registry digest。该次未重跑 ARM64、VM 重启、原生浏览器、systemd 或生产模型/扣费验收；此前各检查仍以各自记录为准。主控运行凭据修复尚需用户自行推送和部署，未以镜像发布声称生产故障已恢复。
+
+
+## 2026-11-13：同机网关与 Cloud 模型读取
+
+用户报告 Cloud 有邮箱但模型和账号并发读取失败，随后确认网关域名解析到 Cloud 节点自身公网 IPv4。现有 `public-web` 规则会阻止这一宿主目标，不能用显示账号或节点 readiness 推断模型链路可用。修复新增显式 `CLOUD_GATEWAY_IPV4`：仅服务网络到指定公网宿主 IP 的 TCP 443 及已建立回复放行；默认留空，桌面不继承，拒绝范围冲突时不开例外。没有开放 host 网络或关闭鉴权。
+
+[Node network run 43392947213](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43392947213) 成功。临时 Ubuntu amd64、Docker 28.0.4、nftables 1.0.9、Node 24.18.0，直接拉取此前发布的固定服务摘要，未重新构建镜像。先验证默认宿主拒绝，再将测试专属公网形态地址配置为网关：两用户均只能到达该地址的 443；确实存活的同宿主 80/18991、其他宿主网桥地址、另一用户容器和私网目标继续拒绝。重建 runtime 并移除配置后，该 443 再次拒绝。原完整出网拒绝、原子更新、防火墙缺失和定向回收检查同轮通过。仅处理本次专属地址、服务、namespace、bridge 和容器。原始结果见 [cohost JSON](verification/cohost-gateway-2026-11-13.json)。
+
+Cloud 20 项单元测试通过，包括非法/私网/保留/额外拒绝的网关地址拒绝，以及只读模型诊断的精确归属校验和 inspect 信息过滤。诊断脚本只用于管理员显式选定实例的 GET，不启停实例、不提交生成或扣款、不输出完整凭据或响应；此轮只对其合成执行入口做检查，没有在生产运行。
+
+DoneBot 的统一网关适配另增加固定的 DNS、超时、TLS、连接及非 JSON 错误。3 个测试文件共 22 项通过；真实隔离 DoneBot 服务配合回环合成网关，安装模式无需用户 JWT 即可读模型和并发；断开网络后身份仍在但 GET 明确失败，恢复网络后无需再次登录即可重新读取。服务端类型和变更文件 lint 通过。这部分源码保留在 DoneBot 工作区，由用户自行推送；同机防火墙修复不依赖更新运行镜像。
+
+网络层检查使用 TCP 443 上的合成 HTTP 服务，证明地址/端口规则及双向流量；不提供 SNI/Host/路径过滤。隔离进程的安装鉴权测试与 Linux 网络测试分别记录，不称为生产网关真实模型/余额闭环。本轮没有修改或验收生产节点，部署步骤见 [同机说明](deployment.md#网关和-cloud-节点同机)。

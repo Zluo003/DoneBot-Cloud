@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-13",
+  "scope": "Disposable Linux regression of explicit cohost gateway HTTPS; synthetic destinations and two isolated tenant containers",
+  "workflow": {
+    "url": "https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43392947213",
+    "run_id": 43392947213,
+    "cloud_revision": "fc5ff89b373c028948f281e63e9ce78af19b2541",
+    "conclusion": "success"
+  },
+  "network": {
+    "result": "controlled_egress_fixture_passed",
+    "kernel": "7.0.0-1014-aws",
+    "node": "v24.18.0",
+    "docker": "28.0.4",
+    "nft": "nftables v1.0.9 (Old Doc Yak #3)",
+    "image": "ghcr.io/zluo003/donebot-cloud-service@sha256:bff0b6888023791b3ceddb90a7601d50d5ec2f90f8f85a6f6ffa531ba770d5c0",
+    "users": 2,
+    "publicHTTP": true,
+    "publicHTTPSAndDNS": true,
+    "gatewayAnonymous401": true,
+    "tenantNetworkDenied": true,
+    "hostPrivateAndPublicDenied": true,
+    "metadataDenied": true,
+    "customPublicRangeDenied": true,
+    "unapprovedTCPAndUDPDenied": true,
+    "IPv6Denied": true,
+    "mappedIPv4AndRebindingDenied": true,
+    "unsolicitedInboundDenied": true,
+    "firewallUnavailableBlocksCreation": true,
+    "foreignFirewallTablePreserved": true,
+    "failedAtomicUpdateRetainsPolicy": true,
+    "explicitCohostGatewayHTTPS": true,
+    "cohostOtherPortsAndHostAddressesDenied": true,
+    "cohostCrossTenantDenied": true,
+    "gatewayExceptionRemovalRestoresDeny": true,
+    "agentRecreation": true,
+    "scopedNetworkRemoval": true
+  },
+  "limits": {
+    "production_node_modified": false,
+    "production_model_or_balance_called": false,
+    "authenticated_model_read_in_linux": false,
+    "tls_sni_or_path_filtering": false,
+    "exception_public_ipv4_tcp_443_only": true
+  },
+  "source_revision": "e9d24ff50f10e5772409089386f202e2b1813447"
+}

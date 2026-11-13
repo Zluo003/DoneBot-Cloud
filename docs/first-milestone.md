@@ -28,6 +28,8 @@
 
 ## 真实 Linux 验证
 
+- [x] 同机网关受限 HTTPS：显式指定公网 IPv4 后仅服务容器可连该宿主 IP 的 TCP 443，其他宿主地址/端口和跨用户仍拒绝，撤销配置后恢复拒绝；已用已发布镜像在一次性 Linux 通过，未操作生产节点。见 [同机证据](verification/cohost-gateway-2026-11-13.json)。
+
 - [x] 2026-11-13 公开 Cloud 后完成 amd64 服务/桌面双镜像 CI 发布；Docker 28.0.4 / nftables 1.0.9 的真实双用户、出网、桌面及双盘恢复通过，注册表清单/配置可匿名读取。固定摘要见 [镜像配置](../deploy/images/2026-11-13-amd64.env)，证据见 [发布记录](verification/images-2026-11-13.json)。
 
 - [x] 从核对过的 DoneBot 提交构建 `server` 镜像，按固定 image ID 创建两个真实容器，验证独立卷/IPC 目录、UID/CPU/内存/PID 配置、只读根、禁特权及网络隔离。

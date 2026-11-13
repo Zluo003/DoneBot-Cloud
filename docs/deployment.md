@@ -203,6 +203,29 @@ CLOUD_WORKER_PORT=18991
 
 同步安装 `donebot-cloud-health.service/.timer`，每 30 秒执行只读 readiness，失败退出非零并进入 journal。默认检查回环 18991；可在 `/etc/donebot-cloud/health.env` 指定 `CLOUD_HEALTH_ORIGIN=http://127.0.0.1:实际端口`。worker 要求最近 30 秒主控联系成功且 agent/Docker/磁盘就绪；不暴露令牌。外部监控可读取该状态或失败 unit，目前没有接入邮件/消息告警平台。
 
+### 网关和 Cloud 节点同机
+
+支持同机部署，但 `public-web` 默认拒绝容器访问宿主机的所有地址；仅打开公网 443 并不能绕过这层隔离。若 `donebot.cn` 解析到本机公网 IPv4，原有规则会同时阻止模型目录、账号并发及模型请求；安装凭据仍可显示邮箱，因此页面可能表现为“已登录但没有模型”。
+
+在 `agent.env` 显式配置已经核对的网关公网 IPv4（最多 8 个，逗号分隔），再更新节点代码和重启服务：
+
+```dotenv
+CLOUD_EGRESS_MODE=public-web
+CLOUD_GATEWAY_IPV4=<已确认的网关公网IPv4>
+```
+
+仅 DoneBot 服务容器可访问这些宿主 IPv4 的 TCP 443，并允许相应已建立连接的回复；桌面容器不继承此例外。其他宿主地址、端口、私网、元数据和跨租户连接继续拒绝。配置不接受域名、CIDR、私网或保留地址，不跟随 DNS 自动扩大授权；额外拒绝范围优先，冲突时拒绝配置。此处控制的是 IP 和端口，允许访问该 IP 的整个 HTTPS 入口，不解析 SNI/Host/路径；HTTPS 入口内的业务仍依赖各自鉴权。宿主机现有防火墙仍可继续拒绝连接。
+
+在维护窗口先停止 worker，再停止 agent，并确认定向停机成功。更新 **systemd 实际使用的** Cloud 工程目录，保全原状态目录/密钥/卷，修改同一 `agent.env` 后先启动 agent，再启动 worker。该修复只改变受信节点规则，不需要替换 DoneBot 或桌面镜像，也不需要删除、重新购买实例或重新注册；现有 `public-web` 网络和数据卷继续复用。不要通过关闭 nftables 或使用 host 网络解决。
+
+只读诊断（使用后台给出的本用户实例 UUID）：
+
+```sh
+sudo node --env-file=/etc/donebot-cloud/agent.env /实际Cloud工程目录/scripts/diagnose-models.mjs --instance <实例UUID>
+```
+
+命令核对部署和实例标签，只对指定容器执行 DNS 检查及网关 GET；不启停、创建或删除资源，不提交模型任务，不扣款。凭据只在容器内读取并使用，输出仅含网络模式、DNS 数量、HTTP 状态、允许的错误码/request ID、模型数量和并发字段是否有效，不输出凭据、完整响应、邮箱或余额。`anonymous_models.status=401` 表示网关可达且匿名访问被拒绝；`models/account.status=200` 才证明安装凭据对应的读取成功。它不证明真实模型生成或计费成功。
+
 ## 调度、断网与回收
 
 - 默认每 3 秒心跳，主控发放最多 20 秒运行租约及 90 秒命令租约。worker 从请求发出时计算授权剩余时间；agent 独立看门狗在续租停止后尝试停机。访问先拒绝，实际 Docker 停机仍受正在执行命令及 Docker 超时影响，不承诺精确到期毫秒即终止所有进程。

@@ -37,7 +37,7 @@ DoneBot 的多服务器云实例工程。donebot-api 负责账户、余额、月
 
 每实例使用独立子域名，60 秒一次性开门码兑换 HttpOnly Cookie，浏览器无需向原生 WebSocket 设置 Authorization。Cookie、JWT、实例归属和订阅持续复查，撤销和到期会关闭已有连接；详见 [浏览器接入](docs/browser-access.md)。
 
-DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU / 内存 / PID 限制和独立卷，无 Docker socket、无发布端口。网络默认 `none`；Linux 节点可显式启用 `public-web`，由独立 bridge 和宿主机 nftables 强制允许公网 HTTP/HTTPS、指定 DNS，拒绝租户互访、宿主机、私网、元数据、IPv6 及其他端口。规则安装失败不开机，删除网络成功后才释放其规则；不依赖应用遵守代理变量。原生浏览器 HTTPS/SSE 与资料隔离已通过 Linux 检查；模型免登录及请求使用合成模型服务验证，未调用真实余额或生产模型。容器共享宿主机内核，不能隔离宿主机管理员。
+DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU / 内存 / PID 限制和独立卷，无 Docker socket、无发布端口。网络默认 `none`；Linux 节点可显式启用 `public-web`，由独立 bridge 和宿主机 nftables 强制允许公网 HTTP/HTTPS、指定 DNS，拒绝租户互访、宿主机（显式网关 HTTPS 例外除外）、私网、元数据、IPv6 及其他端口。规则安装失败不开机，删除网络成功后才释放其规则；不依赖应用遵守代理变量。原生浏览器 HTTPS/SSE 与资料隔离已通过 Linux 检查；模型免登录及请求使用合成模型服务验证，未调用真实余额或生产模型。容器共享宿主机内核，不能隔离宿主机管理员。
 
 生产默认运行服务与桌面各 5 GiB 固定容量 ext4 文件系统，实际可用空间略少。后台用户页提供资源余量、最多 3 份本地加密备份（包含两盘）、停机备份及确认覆盖恢复；节点可选自动备份轮换。备份随到期回收删除，不是异地灾备，详见 [存储与备份](docs/storage-backups.md)。
 
@@ -66,6 +66,8 @@ DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU 
 镜像可以在一台构建机准备一次，再分发给同架构节点。运行 `npm run images:prepare -- --source /path/to/DoneBot --revision <已审核的完整SHA> --platform linux/amd64 --output /path/to/new-bundle`，会复用原版服务 Dockerfile 和桌面生成器，输出两个固定 image ID、离线 `images.tar`、校验和及 `agent-images.env`。DoneBot 源码需干净且已安装依赖，构建机需支持目标架构；节点只需校验和 `docker load`，见 [镜像准备](docs/deployment.md#镜像准备与离线分发)。这条命令不发布镜像，也不修改正在运行的节点。
 
 也可在本仓库 Actions 手动运行 **Cloud service and desktop images**，按指定 DoneBot SHA 和架构构建两类镜像，真实 Linux 双用户/桌面验证通过后发布 GHCR，并输出节点可直接使用的固定摘要。DoneBot 和 Cloud 仓库现均已公开。2026-11-13 的 [amd64 双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43387570590) 已通过真实 Linux、出网和桌面验证，可匿名读取；固定摘要见 [节点镜像配置](deploy/images/2026-11-13-amd64.env)，直接拉取命令见 [部署说明](docs/deployment.md#已发布的-amd64-镜像)。
+
+网关和 Cloud 节点可以同机。若网关域名解析到节点自身公网 IPv4，需在 `public-web` 下显式配置 `CLOUD_GATEWAY_IPV4`，仅为服务容器放行指定宿主 IP 的 HTTPS；默认宿主拒绝仍然有效。出现“有账号但无模型”时，见 [同机配置与只读诊断](docs/deployment.md#网关和-cloud-节点同机)。
 
 启动请求返回 202 和节点 `/healthz` 成功都不代表实例已经运行。`runtime-credential` 的业务 404、主控版本核对及升级步骤见 [启动失败诊断](docs/runtime-credential-diagnostics.md)。
 

@@ -48,7 +48,7 @@ if (process.argv[2] === '--verify') {
   for (const root of Object.values(repos)) if (!relative(root, destination).startsWith('..' + sep)) throw new Error('Candidate output must be outside all three repositories');
   if ((await readdir(output)).length) throw new Error('Candidate output must be empty');
   const manifest = { schema: 1, createdAt: new Date().toISOString(), status: 'source-candidate', productionPublished: false,
-    requirements: { gatewayMigrations: [260, 261, 262, 263], node: '>=24.13.0 <25', donebotImageTarget: 'server', registryImages: 'not-published', packagedElectronGUI: 'not-qualified' }, repositories: {} };
+    requirements: { gatewayMigrations: [260, 261, 262, 263, 264], node: '>=24.13.0 <25', donebotImageTarget: 'server', registryImages: 'not-published', packagedElectronGUI: 'not-qualified' }, repositories: {} };
   for (const [name, root] of Object.entries(repos)) {
     const before = await fingerprint(root), archive = name + '-source.tar.gz';
     run('tar', ['--null', '--no-recursion', '-czf', join(output, archive), '-C', root, '-T', '-'], {

@@ -33,7 +33,9 @@ DoneBot 的多服务器云实例工程。donebot-api 负责账户、余额、月
 
 节点用专属令牌领取任务、续租和回报，不直连数据库、不持有主控私钥或网关管理员凭据。HTTP / WebSocket 均经过归属及签名检查；原生 DoneBot 会话由 agent 保存和续建，不发给浏览器。数据库留在主控私网即可，多机部署不需要开放公网 PostgreSQL。
 
-用户在网关 `/cloud` 开通、启停并打开实例。每实例使用独立子域名，60 秒一次性开门码兑换 HttpOnly Cookie，浏览器无需向原生 WebSocket 设置 Authorization。Cookie、JWT、实例归属和订阅持续复查，撤销和到期会关闭已有连接；详见 [浏览器接入](docs/browser-access.md)。
+用户可从 DoneBot 客户端“添加云服务”、添加工作区/服务器页面或账号设置，直接在应用内查看套餐、当前账号余额和到期时间，确认开通、启停或取消续费。开通成功后点“连接 Cloud”，通过既有原生配对加入应用，不跳转网页、不另外注册账号。按月从同一 DoneBot 账号余额扣款，余额不足失败；请求中断可使用原确认重试。取消后重新开通会重新扣款并开始新的月付周期。主控仍使用 donebot-api 的现有 Cloud API；客户端需重新打包发布，更新网关不会自动更新客户端。网页 `/cloud` 继续作为可选入口。
+
+每实例使用独立子域名，60 秒一次性开门码兑换 HttpOnly Cookie，浏览器无需向原生 WebSocket 设置 Authorization。Cookie、JWT、实例归属和订阅持续复查，撤销和到期会关闭已有连接；详见 [浏览器接入](docs/browser-access.md)。
 
 DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU / 内存 / PID 限制和独立卷，无 Docker socket、无发布端口。网络默认 `none`；Linux 节点可显式启用 `public-web`，由独立 bridge 和宿主机 nftables 强制允许公网 HTTP/HTTPS、指定 DNS，拒绝租户互访、宿主机、私网、元数据、IPv6 及其他端口。规则安装失败不开机，删除网络成功后才释放其规则；不依赖应用遵守代理变量。原生浏览器 HTTPS/SSE 与资料隔离已通过 Linux 检查；模型免登录及请求使用合成模型服务验证，未调用真实余额或生产模型。容器共享宿主机内核，不能隔离宿主机管理员。
 
@@ -55,11 +57,13 @@ DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU 
 
 1. 推送包含 Cloud 改动的 donebot-api，并发布带 Linux 二进制和 `checksums.txt` 的正式 Release。只推送源码不会让后台获得新版；仅镜像的 simple release 不适用于二进制在线更新。
 2. 在网关服务器一次性配置 `/etc/sub2api/environment`：`DONEBOT_ENABLED`、固定的 `DONEBOT_CLOUD_SIGNING_SEED`、主控和浏览器 origin。旧 systemd unit 通过 drop-in 加载该文件；后续后台更新保留这些配置和密钥。
-3. 备份网关数据库，在后台更新并重启。新二进制自动应用迁移 260–263；先保持 Cloud 套餐关闭。
+3. 备份网关数据库，在后台更新并重启。新二进制自动应用迁移 260–264；先保持 Cloud 套餐关闭。
 4. 为 `*.cloud.donebot.cn` 配置指向主控的 DNS/TLS；登记节点，将后台生成的节点 ID、独立 token 和主控公钥填入节点配置，再启动 agent、worker 和 health timer。
 5. 隔离预发布验收通过后，配置月费、默认 7 天保留期和节点容量，开放套餐。
 
 完整命令、持久配置、旧 unit 兼容步骤及节点环境文件见 [部署说明](docs/deployment.md)，回退边界见 [发布说明](docs/release-runbook.md)。网关在线更新只更新网关程序；Cloud 节点代码及 DoneBot/桌面镜像按节点升级流程单独发布。
+
+“Cloud 管理”的节点区可随时查看主控公钥，添加节点或轮换令牌时也会一并显示。未配置有效签名 seed 时，页面提示配置方法并禁止添加/轮换，已有节点仍可管理。空节点支持确认删除：立即撤销令牌并保留历史记录；仍有实例（含停机或回收失败）的节点须先完成回收。删除登记不会卸载服务器上的 worker 和 agent。
 
 ## 本地运行
 

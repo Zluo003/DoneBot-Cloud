@@ -1,8 +1,43 @@
 # 隔离验证记录
 
-日期：2026-11-11 至 2026-11-12。功能及资源变更验证均使用临时目录、随机合成账户/令牌、隔离 DoneBot fixture 或测试私有 PostgreSQL。用户明确提供的测试账号仅用于线上登录及只读身份接口核对，没有变更实际余额、用户应用或已有实例；凭据和令牌未落盘。
+日期：2026-11-11 至 2026-11-13。功能及资源变更验证均使用临时目录、随机合成账户/令牌、隔离 DoneBot fixture 或测试私有 PostgreSQL。用户明确提供的测试账号仅用于线上登录及只读身份接口核对，没有变更实际余额、用户应用或已有实例；凭据和令牌未落盘。
 
-## 已通过
+## 2026-11-13：应用内 Cloud 开通
+
+DoneBot 添加工作区/服务器、应用菜单和账号设置均使用自有应用内面板。复用现有
+网关账号及 Cloud API，展示月费/余额、确认开通、启停/取消续费，实例就绪后走
+既有原生配对，不跳转网页。安装凭据不可取得 Cloud 扣款权限；账号或价格变化
+必须重新确认。价格仅在提交前复查，不是主控原子报价锁定。
+
+- DoneBot 7 个相关测试文件共 66 项通过：组件确认/取消、同键重试、余额及容量
+  失败、账号切换、禁用套餐、原生配对、凭据权限与状态裁剪、侧栏依赖和隔离服务
+  闭环。真实本地服务连接合成主控，验证余额不足零扣款、丢失响应后同键重试仅
+  一笔合成扣款、已付周期停启不重复扣款、取消续费与退出后拒绝访问。
+- 前后端 TypeScript、修改文件 oxlint、临时目录 Vite 生产构建通过；构建仍有
+  既有 CSS highlight、第三方注释与 chunk 大小提示。
+- 真实 Chrome 独立 `dbc-native-20261113` session 用隔离 launcher 登录合成账户：
+  应用内确认后余额 50 → 37.5，显示运行中；连接按钮调用既有原生配对桥接替身
+  1 次，外部浏览器调用 0 次。390 × 844 无横向溢出，取消续费有明确确认。
+- 客户端证据在其忽略目录 `.omb-scratch/verify-evidence/donebot-cloud/result.json`，
+  内含持久服务日志路径；截图为 `output/playwright/donebot-cloud-native-confirm.png`
+  及 `donebot-cloud-native-narrow.png`。完整命令见 DoneBot 的
+  `docs/verification/donebot-gateway.md`。
+
+本轮替代此前网页入口方案；未修改主控计费规则、发布客户端或部署生产。合成
+worker/余额与桌面桥接替身仅证明客户端接线，不替代安装包 GUI、实际云连接和
+真实 Linux 隔离验收。
+
+## 2026-11-13：公钥与服务器删除
+
+- 网关前端 `CloudPanel.spec.ts`、管理 API `donebot.spec.ts` 共 14 项测试通过：添加/轮换直接交付公钥、刷新失败仍保留本次凭据、隐藏令牌后仍可查看公钥、缺少签名配置的提示和操作限制、删除确认与取消、有实例禁止删除、并发分配冲突提示。
+- `go test ./internal/handler/admin ./internal/server/routes ./internal/cloudbilling` 通过。HTTP 合约确认缺少或无效 seed 时创建/轮换不写库、节点列表仍可读取、添加响应带公钥和一次性 token 且不含 seed；删除及节点写路由要求既有 step-up。
+- `CLOUD_BILLING_PG_FIXTURE=1 go test -tags integration ./internal/cloudbilling -run '^TestPostgresNodeDeletion' -count=1 -timeout=3m` 通过。真实临时 PostgreSQL 应用迁移 260–264：pending、stopped、deleting/error 实例均阻止删除；实际主控回收确认后可删除，令牌失效，重复删除安全，历史实例及退款流水保留，同地址重新登记使用新身份。另进行 12 轮删除/分配竞争，未出现存活实例分配到已删除节点或删除成功仍扣费的情况。
+- `CLOUD_BILLING_PG_FIXTURE=1 CLOUD_BILLING_NODE_FIXTURE=1 go test -tags integration ./internal/cloudbilling -count=1 -timeout=4m` 通过，覆盖新增迁移后的既有计费、浏览器授权及双 Node worker 回归。本命令未启用真实 DoneBot 浏览器/模型 fixture，对应两项测试跳过；此前证据不因此更新。
+- `vue-tsc --noEmit`、修改前端文件 ESLint、临时目录 Vite 生产构建通过。构建保留既有 Browserslist、动态导入/chunk 和 shell 弃用提示。Cloud 发布候选脚本加入迁移 264，`node --check` 与两个仓库 `git diff --check` 通过。
+
+本轮仅验证管理功能和主控数据规则，未启动 Linux VM、未重复桌面或租户隔离验收，未连接生产网关、扣款或删除实际服务器。删除功能只撤销主控登记；服务器程序的停止和卸载需单独处理。
+
+## 2026-11-11 至 2026-11-12：已通过
 
 | 验证 | 结果与证明范围 |
 | --- | --- |

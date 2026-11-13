@@ -4,10 +4,10 @@ Docker、受控出口、存储/备份、浏览器、故障恢复与 systemd 生�
 
 ## 主控：donebot-api
 
-1. 按网关已有方式发布包含 Cloud 改动的后端和前端，启用 `donebot.enabled`。sh 安装的现有网关按下节使用后台在线更新；正式二进制内嵌前端和迁移。迁移 `260_donebot_cloud_subscriptions.sql`、`261_donebot_cloud_control.sql`、`262_donebot_cloud_browser.sql`、`263_donebot_cloud_runtime.sql` 随网关启动时的正常迁移机制执行，无需手工执行 SQL；本轮未对生产数据库执行。先备份网关数据库及密钥，再按正常发布流程迁移。
+1. 按网关已有方式发布包含 Cloud 改动的后端和前端，启用 `donebot.enabled`。sh 安装的现有网关按下节使用后台在线更新；正式二进制内嵌前端和迁移。迁移 `260_donebot_cloud_subscriptions.sql`、`261_donebot_cloud_control.sql`、`262_donebot_cloud_browser.sql`、`263_donebot_cloud_runtime.sql`、`264_donebot_cloud_node_deletion.sql` 随网关启动时的正常迁移机制执行，无需手工执行 SQL；本轮未对生产数据库执行。先备份网关数据库及密钥，再按正常发布流程迁移。
 2. 通过部署密钥管理注入 `DONEBOT_CLOUD_SIGNING_SEED`：32 字节随机 Ed25519 seed 的标准 Base64，只保存在主控。多副本主控使用同一 seed。可用 `node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64"))'` 生成后存入私有密钥文件，不加入版本库、终端录屏或共享日志。
 3. 在现有 DoneBot 管理页选择“Cloud 管理”，设置月费和保留天数（默认 7），先保持套餐关闭；节点和隔离预发布验收完成后再启用。金额单位沿用账户余额，非新增货币单位。
-4. 每台服务器登记名称、私网 HTTPS origin、实例名额。保存一次性显示的独立节点 token、node ID，以及主控公钥。后台可轮换或撤销节点令牌；旧令牌立即失效，轮换所得新令牌仅显示一次，写入该节点配置后重启 worker。撤销同时暂停新分配，已有实例会在租约失效后停机，数据仍留原节点。
+4. 每台服务器登记名称、私网 HTTPS origin、实例名额。保存一次性显示的独立节点 token、node ID，以及主控公钥。主控公钥在节点区持续显示，添加和轮换令牌响应也直接附带公钥，填入节点 `worker.env` 的 `CLOUD_MASTER_PUBLIC_KEY`。后台可轮换或撤销节点令牌；旧令牌立即失效，轮换所得新令牌仅显示一次，写入该节点配置后重启 worker。撤销同时暂停新分配，已有实例会在租约失效后停机，数据仍留原节点。
 5. PostgreSQL 仅由网关访问。节点经 VPN/虚拟网访问主控 API，主控经私网 HTTPS 访问节点；不开放公网数据库，不给节点管理员 JWT 或数据库密码。
 6. 浏览器入口配置 `DONEBOT_CLOUD_MASTER_ORIGIN=https://donebot.cn`、`DONEBOT_CLOUD_BROWSER_ORIGIN=https://cloud.donebot.cn`。将 `*.cloud.donebot.cn` 的 DNS/TLS 指向主控，代理保留实例 Host、原路径、Origin 和 WebSocket 升级，并允许 SSE 长连接；禁止缓存。不要把实例域名直接指向 worker。详细配置及会话限制见 [浏览器接入](browser-access.md)。不配置 browser origin 时保持禁用，配置错误则主控启动失败。
 
@@ -40,6 +40,8 @@ DONEBOT_CLOUD_BROWSER_ORIGIN=https://cloud.donebot.cn
 
 密钥可在私有终端用 `openssl rand -base64 32` 生成，填入环境文件并纳入部署密钥备份；不要复制到 GitHub、截图或共享日志。后续升级、重启保留原 seed，多副本主控使用同一个值。更换 seed 会改变节点验签公钥并使已有网页会话失效，不能作为每次更新的初始化步骤。
 
+节点区提示“主控签名密钥未配置或格式错误”时，检查该环境文件及下述 unit 加载路径，重启后刷新。先找回并修正已有 seed；仅首次安装且尚无 seed 时生成新值。缺少有效 seed 会阻止添加节点和轮换令牌，节点列表、撤销和删除仍可使用。
+
 当前安装脚本生成的 unit 已包含 `EnvironmentFile=-/etc/sub2api/environment`。后台在线更新和 `install.sh upgrade` 都只替换二进制，不会补写旧 unit；曾用旧安装脚本的服务器应补一个持久 drop-in。可先只读检查加载路径：
 
 ```sh
@@ -62,7 +64,7 @@ EnvironmentFile=-/etc/sub2api/environment
 
 修改 unit/drop-in 后执行 `sudo systemctl daemon-reload`。这种补充方式保留原 unit 的用户、监听端口、目录和在线重启设置，不用重新运行完整安装流程。
 
-**更新端：继续使用现有后台。** 备份数据库后，点击侧栏版本号 → 检查更新 → 立即更新 → 立即重启。正式二进制带 `embed` 前端，替换程序后会同时切换 Cloud 页面；重启时自动依序应用尚未执行的迁移，包括 260–263，不单独上传前端或重复导入 SQL。若另外配置过静态前端覆盖目录或独立前端反向代理，需同步更新该部署，避免继续展示旧页面。
+**更新端：继续使用现有后台。** 备份数据库后，点击侧栏版本号 → 检查更新 → 立即更新 → 立即重启。正式二进制带 `embed` 前端，替换程序后会同时切换 Cloud 页面；重启时自动依序应用尚未执行的迁移，包括 260–264，不单独上传前端或重复导入 SQL。若另外配置过静态前端覆盖目录或独立前端反向代理，需同步更新该部署，避免继续展示旧页面。
 
 仅修改环境文件而不升级版本时，在维护窗口执行 `sudo systemctl restart sub2api` 使新环境生效。正常在线升级时的“立即重启”同样会重新加载环境；以后不再改变 unit 时无需重复执行 `daemon-reload`。可查看启动结果：
 
@@ -151,6 +153,12 @@ CLOUD_WORKER_PORT=18991
 - worker 重启先停止其本地 manifest 记录的实例，取得新租约后恢复。agent 启动先检查并停止本部署已有容器；正常退出停止已知实例，systemd ExecStopPost 再执行定向 fence，覆盖强制终止。agent 会拒绝接管不同部署标签的资源；其状态目录、deployment ID、加密 key 和 Docker 资源不能任意重建或互换。
 - 异常重启可清理由当前 UID 拥有、确认无监听者且 inode 未变化的旧 agent socket；不会停止其他进程。worker/agent 应交给服务管理器监督，当前无宿主机级独立硬件看门狗。
 
+### 删除服务器登记
+
+在后台节点表选择“删除服务器”，核对节点名称后确认。仅允许删除已分配数为 0 的节点；停机、待删除和回收失败的实例均占用节点，须先按实例生命周期完成回收。后端与新分配使用同一节点锁，页面显示为空后发生的新分配也会阻止删除。
+
+删除后节点从列表移除，令牌立即失效，不再接受心跳或分配。历史实例关联和扣退费流水保留；重复删除安全。同一地址可重新登记，但必须使用新节点 ID 和新令牌。此操作仅删除主控登记，不会连接主机卸载程序；确认没有实例后，在对应服务器自行停止并卸载本次部署的 worker、health timer 和 agent。离线且仍有实例的节点不能通过删除登记绕过数据回收。
+
 ## 接口索引
 
 统一返回网关现有 `{code,data}` 结构；用户变更要求 `Idempotency-Key`，正文为空对象，身份来自 JWT 中间件。
@@ -167,6 +175,7 @@ CLOUD_WORKER_PORT=18991
 | 节点 | `POST /donebot/cloud/nodes/:node/claim|report|confirm-purge|runtime-credential` |
 | 现有管理后台 | `GET/PUT /admin/donebot/cloud/plan` |
 | 现有管理后台 | `GET/POST /admin/donebot/cloud/nodes`、`PUT .../nodes/:node` |
+| 现有管理后台 | `DELETE /admin/donebot/cloud/nodes/:node`，仅空节点 |
 | 现有管理后台 | `POST /admin/donebot/cloud/nodes/:node/credential`，正文 `{revoke:boolean}` |
 | 现有管理后台 | `GET /admin/donebot/cloud/instances`、`GET .../events` |
 

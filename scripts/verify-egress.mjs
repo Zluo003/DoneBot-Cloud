@@ -21,6 +21,7 @@ const run = (binary, args) => exec(binary, args, { timeout: 20000, maxBuffer: 10
 const ip = (...args) => run('/usr/sbin/ip', args);
 const config = { stateDir: join(dir, 'resources'), image: process.env.CLOUD_DONEBOT_IMAGE, binary: process.env.CLOUD_DOCKER_BINARY || '/usr/bin/docker', egress: 'public-web', egressDenyIPv4: [deniedPublicIP] };
 let runtime = new DockerRuntime(config), probeRuntime, server, namespaceCreated = false, linkCreated = false, hostAddress = false;
+const extraHostServers = [];
 let publicServer;
 const inside = (id, script, ...args) => runtime.docker(['container', 'exec', runtime.names(id).container, 'node', '--input-type=module', '-e', script, ...args]);
 const requestScript = `import http from 'node:http';
@@ -56,6 +57,11 @@ try {
   }
   await ip('address', 'add', `${hostPublicIP}/32`, 'dev', 'lo'); hostAddress = true;
   server = createServer((_req, res) => res.end('fixture')); await new Promise((resolve, reject) => { server.once('error', reject); server.listen(443, '0.0.0.0', resolve); });
+  for (const port of [80, 18991]) {
+    const target = createServer((_req, res) => res.end('fixture')); extraHostServers.push(target);
+    await new Promise((resolve, reject) => { target.once('error', reject); target.listen(port, '0.0.0.0', resolve); });
+    await hostRequest(`http://${hostPublicIP}:${port}`);
+  }
   publicServer = spawn('/usr/sbin/ip', ['netns', 'exec', namespace, process.execPath, '--input-type=module', '-e', `
     import{createServer}from'node:http';import{createSocket}from'node:dgram';
     for(const port of [22,80,443,8080])createServer((_req,res)=>res.end('fixture')).listen(port,'0.0.0.0');
@@ -106,18 +112,26 @@ try {
   // A rejected atomic update leaves the previous deny rules in place.
   await assert.rejects(runtime.egress.nft(['-f', '-'], `delete table inet ${runtime.egress.table}\nthis is intentionally invalid\n`), { code: 'egress_firewall_failed' });
   assert.deepEqual(await requests(ids[0], [`http://${publicIP}`, `http://${hostPublicIP}:443`]), [true, false]);
+  // Only an explicit public gateway IP may reach the shared host's HTTPS listener.
+  runtime.close(); runtime = new DockerRuntime({ ...config, gatewayIPv4: [hostPublicIP] });
+  for (const [index, id] of ids.entries()) {
+    await runtime.start(id);
+    assert.deepEqual(await requests(id, [`http://${hostPublicIP}:443`, `http://${hostPublicIP}:80`, `http://${hostPublicIP}:18991`, ...gateways.map(address => `http://${address}:443`), `http://${tenantIPs[1 - index]}:443`, `http://${privateIPs[0]}:443`]), [true, false, false, false, false, false, false]);
+  }
   // Agent process recreation retains the owned networks and reinstalls the complete set.
   runtime.close(); runtime = new DockerRuntime(config);
   for (const id of ids) await runtime.start(id);
+  assert.deepEqual(await requests(ids[0], [`http://${hostPublicIP}:443`]), [false]);
   await runtime.purge(ids[0]);
   assert.equal(await runtime.inspect('network', runtime.names(ids[0]).network), null);
   assert.deepEqual(await requests(ids[1], [`http://${publicIP}`, `http://${hostPublicIP}:443`]), [true, false]);
-  console.log(JSON.stringify({ result: 'controlled_egress_fixture_passed', kernel: release(), node: process.version, docker: (await runtime.docker(['version', '--format', '{{.Server.Version}}'])).trim(), nft: (await run('/usr/sbin/nft', ['--version'])).stdout.trim(), image: runtime.image, users: 2, publicHTTP: true, publicHTTPSAndDNS: true, gatewayAnonymous401: true, tenantNetworkDenied: true, hostPrivateAndPublicDenied: true, metadataDenied: true, customPublicRangeDenied: true, unapprovedTCPAndUDPDenied: true, IPv6Denied: true, mappedIPv4AndRebindingDenied: true, unsolicitedInboundDenied: true, firewallUnavailableBlocksCreation: true, foreignFirewallTablePreserved: true, failedAtomicUpdateRetainsPolicy: true, agentRecreation: true, scopedNetworkRemoval: true }));
+  console.log(JSON.stringify({ result: 'controlled_egress_fixture_passed', kernel: release(), node: process.version, docker: (await runtime.docker(['version', '--format', '{{.Server.Version}}'])).trim(), nft: (await run('/usr/sbin/nft', ['--version'])).stdout.trim(), image: runtime.image, users: 2, publicHTTP: true, publicHTTPSAndDNS: true, gatewayAnonymous401: true, tenantNetworkDenied: true, hostPrivateAndPublicDenied: true, metadataDenied: true, customPublicRangeDenied: true, unapprovedTCPAndUDPDenied: true, IPv6Denied: true, mappedIPv4AndRebindingDenied: true, unsolicitedInboundDenied: true, firewallUnavailableBlocksCreation: true, foreignFirewallTablePreserved: true, failedAtomicUpdateRetainsPolicy: true, explicitCohostGatewayHTTPS: true, cohostOtherPortsAndHostAddressesDenied: true, cohostCrossTenantDenied: true, gatewayExceptionRemovalRestoresDeny: true, agentRecreation: true, scopedNetworkRemoval: true }));
 } finally {
   const cleanup = await Promise.allSettled(ids.map(id => runtime.purge(id)));
   runtime.close(); probeRuntime?.close();
   publicServer?.kill('SIGTERM');
   if (server?.listening) await new Promise(resolve => server.close(resolve));
+  for (const target of extraHostServers) if (target.listening) await new Promise(resolve => target.close(resolve));
   for (const address of routes.reverse()) await ip('route', 'del', `${address}/32`, 'via', '192.0.2.2', 'dev', hostLink);
   if (hostAddress) await ip('address', 'del', `${hostPublicIP}/32`, 'dev', 'lo');
   if (namespaceCreated) await ip('netns', 'del', namespace);

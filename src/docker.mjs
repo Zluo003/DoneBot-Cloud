@@ -19,7 +19,7 @@ const p=await call('/api/auth/pairing',{label:'DoneBot Cloud access',scopes:['ad
 const s=await call('/api/auth/pair',{code:p.code,label:'DoneBot Cloud access'});process.stdout.write(JSON.stringify(s));`;
 
 export class DockerRuntime {
-  constructor({ stateDir, image, development = false, binary = '/usr/local/bin/docker', healthTimeoutMs = 90000, egress = 'none', egressDNS, egressDenyIPv4, nftBinary, gatewayRequired = false, storage = 'volume', storageBytes, desktopImage, desktopBytes, desktopIdleMs }) {
+  constructor({ stateDir, image, development = false, binary = '/usr/local/bin/docker', healthTimeoutMs = 90000, egress = 'none', egressDNS, egressDenyIPv4, gatewayIPv4, nftBinary, gatewayRequired = false, storage = 'volume', storageBytes, desktopImage, desktopBytes, desktopIdleMs }) {
     if (!development && !/^(?:[a-zA-Z0-9./:_-]+@)?sha256:[a-f0-9]{64}$/.test(image || '')) throw new Error('production requires an immutable DoneBot image digest');
     if (!image || /\s|[\x00-\x1f]/.test(image)) throw new Error('invalid image');
     if (!['none', 'public-web'].includes(egress)) throw new Error('invalid egress mode');
@@ -32,7 +32,7 @@ export class DockerRuntime {
     this.store = new Store(join(stateDir, 'metadata'));
     this.store.db.exec('CREATE TABLE IF NOT EXISTS credentials(id TEXT PRIMARY KEY,value TEXT NOT NULL)');
     this.store.db.exec('CREATE TABLE IF NOT EXISTS runtime_credentials(id TEXT PRIMARY KEY,value TEXT NOT NULL)');
-    this.egress = egress === 'none' ? null : new Egress({ namespace: this.namespace, store: this.store, dns: egressDNS, denyIPv4: egressDenyIPv4, binary: nftBinary });
+    this.egress = egress === 'none' ? null : new Egress({ namespace: this.namespace, store: this.store, dns: egressDNS, denyIPv4: egressDenyIPv4, gatewayIPv4, binary: nftBinary });
     if (!['volume', 'bounded-ext4'].includes(storage)) throw new Error('invalid storage mode');
     if (storage === 'bounded-ext4' && !/^unix:\/\/\//.test(process.env.DOCKER_HOST || 'unix:///var/run/docker.sock')) throw new Error('bounded storage requires local Docker');
     this.disks = storage === 'bounded-ext4' ? new BoundedDisks({ stateDir: this.stateDir, store: this.store, bytes: storageBytes }) : null;

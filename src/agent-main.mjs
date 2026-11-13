@@ -14,7 +14,7 @@ const app = await createAgent({ socketPath: resolve(process.env.CLOUD_AGENT_SOCK
     gatewayRequired: !development,
     desktopImage: process.env.CLOUD_DESKTOP_IMAGE, desktopBytes: process.env.CLOUD_DESKTOP_STORAGE_BYTES === undefined ? undefined : Number(process.env.CLOUD_DESKTOP_STORAGE_BYTES), desktopIdleMs: process.env.CLOUD_DESKTOP_IDLE_MINUTES === undefined ? undefined : Number(process.env.CLOUD_DESKTOP_IDLE_MINUTES) * 60000,
     storage: development ? 'volume' : 'bounded-ext4', storageBytes: process.env.CLOUD_STORAGE_BYTES === undefined ? undefined : Number(process.env.CLOUD_STORAGE_BYTES),
-    egress: process.env.CLOUD_EGRESS_MODE || 'none', egressDNS: process.env.CLOUD_EGRESS_DNS?.split(','), egressDenyIPv4: process.env.CLOUD_EGRESS_DENY_IPV4?.split(','), nftBinary: process.env.CLOUD_NFT_BINARY || '/usr/sbin/nft' }),
+    egress: process.env.CLOUD_EGRESS_MODE || 'none', egressDNS: process.env.CLOUD_EGRESS_DNS?.split(','), egressDenyIPv4: process.env.CLOUD_EGRESS_DENY_IPV4?.split(','), gatewayIPv4: process.env.CLOUD_GATEWAY_IPV4?.split(','), nftBinary: process.env.CLOUD_NFT_BINARY || '/usr/sbin/nft' }),
 });
 console.log(JSON.stringify({ app: 'donebot-cloud-agent', ready: true }));
 let closing = false;

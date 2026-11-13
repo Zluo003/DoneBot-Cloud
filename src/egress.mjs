@@ -22,10 +22,12 @@ function contains(range, value) {
 }
 
 export class Egress {
-  constructor({ namespace, store, dns = ['1.1.1.1', '9.9.9.9'], denyIPv4 = [], binary = '/usr/sbin/nft' }) {
+  constructor({ namespace, store, dns = ['1.1.1.1', '9.9.9.9'], denyIPv4 = [], gatewayIPv4 = [], binary = '/usr/sbin/nft' }) {
     instanceID(namespace);
     this.namespace = namespace; this.store = store; this.binary = binary;
     this.denied = [...new Set([...blockedIPv4, ...denyIPv4.map(cidr)])];
+    if (gatewayIPv4.length > 8 || gatewayIPv4.some(ip => !isIPv4(ip) || this.denied.some(range => contains(range, ip)))) throw new Error('gateway HTTPS exceptions must use explicit unblocked public IPv4 addresses');
+    this.gatewayIPv4 = [...new Set(gatewayIPv4)];
     if (!dns.length || dns.length > 3 || dns.some(ip => !isIPv4(ip) || this.denied.some(range => contains(range, ip)))) throw new Error('egress DNS must use public IPv4 resolvers');
     this.dns = [...new Set(dns)]; this.table = `dbc_${namespace.replaceAll('-', '')}`;
     this.owner = `donebot-cloud:${namespace}`;
@@ -54,8 +56,15 @@ export class Egress {
       set bridges { type ifname; ${bridges.length ? `elements = { ${bridges.map(b => `"${b}"`).join(', ')} };` : ''} }
       set denied { type ipv4_addr; flags interval; auto-merge; elements = { ${this.denied.join(', ')} }; }
       set dns { type ipv4_addr; elements = { ${this.dns.join(', ')} }; }
-      chain input { type filter hook input priority -10; policy accept; iifname @bridges counter drop; }
-      chain output { type filter hook output priority -10; policy accept; oifname @bridges counter drop; }
+      set gateways { type ipv4_addr; ${this.gatewayIPv4.length ? `elements = { ${this.gatewayIPv4.join(', ')} };` : ''} }
+      chain input { type filter hook input priority -10; policy accept;
+        iifname @bridges ip daddr @gateways tcp dport 443 ct state new,established counter accept;
+        iifname @bridges counter drop;
+      }
+      chain output { type filter hook output priority -10; policy accept;
+        oifname @bridges ip saddr @gateways tcp sport 443 ct state established counter accept;
+        oifname @bridges counter drop;
+      }
       chain forward { type filter hook forward priority -10; policy accept;
         iifname @bridges jump outbound;
         oifname @bridges ct state established,related counter accept;

@@ -6,6 +6,16 @@ import { join, dirname } from 'node:path';
 import { Egress } from '../src/egress.mjs';
 import { Store } from '../src/store.mjs';
 
+test('gateway HTTPS exceptions require explicit unblocked public IPv4 addresses', async t => {
+  const dir = await mkdtemp('/tmp/dbc-gateway-test-'), store = new Store(dir), namespace = randomUUID();
+  t.after(async () => { store.close(); await rm(dir, { recursive: true, force: true }); });
+  for (const ip of ['127.0.0.1', '10.0.0.1', '169.254.169.254', '168.63.129.16', '::1', '11.22.33.44/24', 'donebot.cn', '11.22.33.44;anything']) {
+    assert.throws(() => new Egress({ namespace, store, gatewayIPv4: [ip] }), /explicit unblocked public IPv4/);
+  }
+  assert.throws(() => new Egress({ namespace, store, gatewayIPv4: ['11.22.33.44'], denyIPv4: ['11.22.33.0/24'] }));
+  assert.deepEqual(new Egress({ namespace, store, gatewayIPv4: ['11.22.33.44', '11.22.33.44'] }).gatewayIPv4, ['11.22.33.44']);
+});
+
 test('nft rules use a private regular file and clean it after success or failure', async t => {
   const dir = await mkdtemp('/tmp/dbc-nft-test-'), record = join(dir, 'observed.json'), binary = join(dir, 'nft-fixture');
   const store = new Store(join(dir, 'metadata'));

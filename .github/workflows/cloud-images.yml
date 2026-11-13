@@ -65,6 +65,8 @@ jobs:
           pnpm --dir sources/DoneBot install --frozen-lockfile --ignore-scripts
           sudo apt-get update -qq
           sudo apt-get install -y nftables e2fsprogs util-linux
+      - name: Verify nftables host compatibility before building
+        run: sudo env PATH="$PATH" CLOUD_DISPOSABLE_LINUX=1 node scripts/verify-egress-host.mjs
       - name: Build service and original desktop images
         run: |
           set -euo pipefail

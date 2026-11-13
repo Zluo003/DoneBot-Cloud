@@ -139,12 +139,26 @@ try {
   assert.equal(await runtime.inspect('container', runtime.desktops.names(a).container), null);
   assert.equal(await runtime.inspect('volume', runtime.desktops.names(a).volume), null);
   console.log(JSON.stringify({ result: 'linux_desktop_fixture_passed', image: runtime.image, desktopImage: runtime.desktops.image, users: 2, actualDesktopContainers: true, nativeDoneBotStatus: true, nativeCUAFrame: true, originalMCPBridge: true, boundedFileDownload: true, executionUID1000: true, otherSocketAndVolumeDenied: true, crossDesktopNetworkDenied: true, stopStartPersistence: true, rawViewerWebSocket: true, nativeViewerWebSocket: true, runtimeLeaseExpiryStopsAndDisconnectsDesktop: true, subscriptionStopDisconnectsViewer: true, stoppedRuntimeRefusesDesktopAccess: true, combinedEncryptedBackups: true, corruptionRejectsBeforeEitherOverwrite: true, idempotentTwoDiskRestore: true, interruptedTwoDiskRestoreRecovered: true, explicitDesktopUpgradeRetainsHome: true, idleStop: true, purgeRemovesDesktopData: true }));
+} catch (error) {
+  console.error(JSON.stringify({ event: 'desktop_fixture_failed', code: error.code || 'unknown', name: error.name, frames: error.stack?.split('\n').filter(line => /^\s+at /.test(line)) }));
+  for (const id of ids) {
+    for (const [role, name] of [['service', runtime.names(id).container], ['desktop', runtime.desktops.names(id).container]]) {
+      try {
+        const value = await runtime.inspect('container', name);
+        console.error(JSON.stringify({ event: 'desktop_fixture_container', instance_id: id, role, state: value?.State?.Status, error: value?.State?.Error, exit_code: value?.State?.ExitCode }));
+      } catch (failure) { console.error(JSON.stringify({ event: 'desktop_fixture_inspect_failed', instance_id: id, role, code: failure.code || 'unknown' })); }
+    }
+  }
+  throw error;
 } finally {
   clearInterval(renewals);
   for (const client of clients) client.terminate();
-  await agent.close();
+  try { await agent.close(); } catch { console.error(JSON.stringify({ event: 'desktop_fixture_agent_close_failed' })); }
   const cleanup = new DockerRuntime(config);
   const results = await Promise.allSettled(ids.map(id => cleanup.purge(id))); await cleanup.close();
   if (results.every(r => r.status === 'fulfilled')) await rm(dir, { recursive: true, force: true });
-  else throw new Error('desktop cleanup incomplete: ' + dir + ' ' + results.map(r => r.reason?.message || '').join(','));
+  else {
+    console.error(JSON.stringify({ event: 'desktop_fixture_cleanup_failed', directory: dir, errors: results.map((result, i) => ({ instance_id: ids[i], code: result.reason?.code || (result.status === 'fulfilled' ? '' : 'unknown') })) }));
+    if (process.exitCode === undefined) process.exitCode = 1;
+  }
 }

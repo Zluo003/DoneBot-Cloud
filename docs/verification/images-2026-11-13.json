@@ -1,0 +1,136 @@
+{
+  "date": "2026-11-13",
+  "scope": "Public amd64 service and desktop images built and verified in disposable GitHub-hosted Linux; synthetic instance data only",
+  "workflow": {
+    "run_id": 43387570590,
+    "url": "https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43387570590",
+    "conclusion": "success",
+    "artifact_id": 14019691425
+  },
+  "publication": {
+    "source_revision": "e9d24ff50f10e5772409089386f202e2b1813447",
+    "platform": "linux/amd64",
+    "output": "/home/runner/work/_temp/donebot-images",
+    "docker_context": "current",
+    "archive": false,
+    "images": {
+      "service": {
+        "id": "sha256:1ca1a077b6e1da0bc3745cdf683fdc88ceadd70873d2cc54c937db471d218ca0",
+        "platform": "linux/amd64",
+        "revision": "e9d24ff50f10e5772409089386f202e2b1813447"
+      },
+      "desktop": {
+        "id": "sha256:a7d369e896154a4bf67e1523045fb1ccc9cb8231e1cd26badedc064c07b9924c",
+        "platform": "linux/amd64",
+        "revision": "e9d24ff50f10e5772409089386f202e2b1813447"
+      }
+    },
+    "cloud_revision": "7107d2690353319ef446fb7e43aa4815d9462202",
+    "registry": {
+      "service": "ghcr.io/zluo003/donebot-cloud-service@sha256:bff0b6888023791b3ceddb90a7601d50d5ec2f90f8f85a6f6ffa531ba770d5c0",
+      "desktop": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:0cb2a79746b823fadf077e86cf5ae7acc88c7935459f4a1736e8778951b7c1ad"
+    }
+  },
+  "linux": {
+    "result": "linux_fixture_passed",
+    "platform": "linux",
+    "arch": "x64",
+    "kernel": "7.0.0-1014-aws",
+    "node": "v24.18.0",
+    "dockerServer": "28.0.4",
+    "image": "sha256:1ca1a077b6e1da0bc3745cdf683fdc88ceadd70873d2cc54c937db471d218ca0",
+    "users": 2,
+    "separateNetworkNamespaces": true,
+    "crossVolumeDenied": true,
+    "dockerSocketAbsent": true,
+    "controlSecretsAbsent": true,
+    "networkDenied": true,
+    "persistence": true,
+    "scopedPurge": true,
+    "publicInternetEgress": false
+  },
+  "egress": {
+    "result": "controlled_egress_fixture_passed",
+    "kernel": "7.0.0-1014-aws",
+    "node": "v24.18.0",
+    "docker": "28.0.4",
+    "nft": "nftables v1.0.9 (Old Doc Yak #3)",
+    "image": "sha256:1ca1a077b6e1da0bc3745cdf683fdc88ceadd70873d2cc54c937db471d218ca0",
+    "users": 2,
+    "publicHTTP": true,
+    "publicHTTPSAndDNS": true,
+    "gatewayAnonymous401": true,
+    "tenantNetworkDenied": true,
+    "hostPrivateAndPublicDenied": true,
+    "metadataDenied": true,
+    "customPublicRangeDenied": true,
+    "unapprovedTCPAndUDPDenied": true,
+    "IPv6Denied": true,
+    "mappedIPv4AndRebindingDenied": true,
+    "unsolicitedInboundDenied": true,
+    "firewallUnavailableBlocksCreation": true,
+    "foreignFirewallTablePreserved": true,
+    "failedAtomicUpdateRetainsPolicy": true,
+    "agentRecreation": true,
+    "scopedNetworkRemoval": true
+  },
+  "desktop": {
+    "result": "linux_desktop_fixture_passed",
+    "image": "sha256:1ca1a077b6e1da0bc3745cdf683fdc88ceadd70873d2cc54c937db471d218ca0",
+    "desktopImage": "sha256:a7d369e896154a4bf67e1523045fb1ccc9cb8231e1cd26badedc064c07b9924c",
+    "users": 2,
+    "actualDesktopContainers": true,
+    "nativeDoneBotStatus": true,
+    "nativeCUAFrame": true,
+    "originalMCPBridge": true,
+    "boundedFileDownload": true,
+    "executionUID1000": true,
+    "otherSocketAndVolumeDenied": true,
+    "crossDesktopNetworkDenied": true,
+    "stopStartPersistence": true,
+    "rawViewerWebSocket": true,
+    "nativeViewerWebSocket": true,
+    "runtimeLeaseExpiryStopsAndDisconnectsDesktop": true,
+    "subscriptionStopDisconnectsViewer": true,
+    "stoppedRuntimeRefusesDesktopAccess": true,
+    "combinedEncryptedBackups": true,
+    "corruptionRejectsBeforeEitherOverwrite": true,
+    "idempotentTwoDiskRestore": true,
+    "interruptedTwoDiskRestoreRecovered": true,
+    "explicitDesktopUpgradeRetainsHome": true,
+    "idleStop": true,
+    "purgeRemovesDesktopData": true
+  },
+  "anonymous_registry_verification": {
+    "service": {
+      "manifest_status": 200,
+      "digest_matches": true,
+      "config_matches_verified_id": true,
+      "platform": "linux/amd64",
+      "revision": "e9d24ff50f10e5772409089386f202e2b1813447",
+      "anonymous_layer_heads": 14,
+      "all_layer_heads_ok": true,
+      "full_docker_pull_performed": false
+    },
+    "desktop": {
+      "manifest_status": 200,
+      "digest_matches": true,
+      "config_matches_verified_id": true,
+      "platform": "linux/amd64",
+      "revision": "e9d24ff50f10e5772409089386f202e2b1813447",
+      "anonymous_layer_heads": 20,
+      "all_layer_heads_ok": true,
+      "full_docker_pull_performed": false
+    }
+  },
+  "limits": {
+    "production_deployed": false,
+    "production_billing_or_model_calls": false,
+    "native_packaged_gui_verified": false,
+    "arm64_rebuilt_in_this_run": false,
+    "vm_reboot_in_this_run": false,
+    "browser_fixture_in_this_run": false,
+    "systemd_fixture_in_this_run": false,
+    "donebot_api_fix_pushed_or_deployed_by_this_task": false
+  }
+}

@@ -280,6 +280,22 @@ worker 的新增回归明确验证业务 404 与无结构 HTTP 404 可区分，�
 
 用户随后自行将 DoneBot 仓库设为公开。只读核实后，重新运行原 Docker workflow 的 run `43370375981`（attempt 2，DoneBot 完整 SHA 仍为 `e9d24ff50f10e5772409089386f202e2b1813447`）。GitHub 托管的临时 amd64/arm64 runner 均实际执行了构建；arm64 构建与 server/UI/DuckDB/浏览器启动检查成功，amd64 的构建、server/UI、开源版、浏览器、服务回环监听和 server+Caddy 配对检查成功。后续原版 `cloud-home` 检查中的引擎列表断言返回 false，任务失败，发布 job skipped；没有将 CI 本地 image ID 称为已发布镜像。
 
-本仓库新增手动 `cloud-images.yml`，限定完整 DoneBot SHA 和 amd64/arm64 平台。它复用原版 Dockerfile/桌面生成器及已有 `verify:linux`、`verify:desktop`，所有验证完成后才执行 registry push；完成清单记录两个真实注册表摘要。新 workflow 的 YAML、各 bash 块及 actionlint 校验用于检查流程配置，不代替真实运行。此次未修改或推送 DoneBot 仓库代码。DoneBot-Cloud 当前仍为私有仓库，其 Actions 额度与 DoneBot 的公开状态分别判断。
+本仓库新增手动 `cloud-images.yml`，限定完整 DoneBot SHA 和 amd64/arm64 平台。它复用原版 Dockerfile/桌面生成器及已有 `verify:linux`、`verify:desktop`，所有验证完成后才执行 registry push；完成清单记录两个真实注册表摘要。新 workflow 的 YAML、各 bash 块及 actionlint 校验用于检查流程配置，不代替真实运行。此次未修改或推送 DoneBot 仓库代码。该次检查时 DoneBot-Cloud 仍为私有仓库，其 Actions 额度与 DoneBot 的公开状态分别判断。
 
 新流程已通过 actionlint 1.7.12、YAML 和 bash 语法检查，推送后触发了 [Cloud run 43383723725](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43383723725)，平台为 `linux/amd64`、DoneBot SHA 同上。job 的 steps 为空，GitHub annotation 明确为账户账单失败或需提高支出额度，尚未执行构建。没有绕过验证发布镜像，也没有自动公开 Cloud 仓库或修改账户计费。要继续执行需有可用私有 Actions 额度，或用户明确决定将该仓库公开后重跑。
+
+
+## 2026-11-13：Cloud 公开授权与 Linux 兼容修复
+
+用户明确授权公开 Cloud 后，已将 `Zluo003/DoneBot-Cloud` 设为公开，并继续使用 GitHub 临时 Linux runner 构建；没有修改账户账单或生产节点。源码仍固定在 DoneBot `e9d24ff50f10e5772409089386f202e2b1813447`，平台 `linux/amd64`。
+
+真实 runner 暴露并修复两处兼容问题：
+
+- nftables 1.0.9 不接受 Node 子进程基于 socket 的 stdin 作为 `nft -f -` 规则文件。现改用本次创建的 0700 临时目录和 0600 常规文件，整套规则仍为单次原子事务，成功/失败均精确清理。新增构建前 nft 主机检查和常规文件回归；完整 `verify:egress` 在 Docker 28.0.4 / nftables 1.0.9 上通过。
+- Docker 28.0.4 的 inspect 使用 `CAP_CHOWN` 等名称，桌面原校验只接受 `CHOWN` 等别名。保留首个 fixture 错误后，运行 [43387029397](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43387029397) 明确显示 `desktop_resource_spec_mismatch` 和这组前缀差异。校验现接受两种等价名称，能力集合仍严格一致；新增、缺少、重复能力和 `CAP_ALL` 继续拒绝。18 项本地单元测试通过。
+
+桌面 fixture 只记录阶段、稳定错误码、栈位置和允许的容器状态/规格字段，不输出凭据、完整环境变量或查看链接。退出清理失败单独报告，保留原始失败；仅处理本次 fixture 明确拥有的两个实例。
+
+最终 [run 43387570590](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43387570590) 成功，Cloud SHA `7107d2690353319ef446fb7e43aa4815d9462202`。在临时 Ubuntu amd64 runner（kernel `7.0.0-1014-aws`、Docker 28.0.4、Node 24.18.0、nftables 1.0.9）完成两类真实镜像构建，以及 `verify:linux`、`verify:egress`、`verify:desktop`。桌面检查包含原 CUA/MCP、文件、WebSocket、跨用户网络和卷拒绝、停启持久化、双盘备份/损坏拒绝/幂等和中断恢复、空闲停机、升级保留、租约到期断连和定向删除。全部通过后才执行 GHCR push；没有跳过发布前检查。
+
+发布清单、三组原始 fixture 结果和匿名访问复核保存在 [images JSON](verification/images-2026-11-13.json)，对应 [固定节点配置](../deploy/images/2026-11-13-amd64.env)。匿名清单/配置读取返回 200，两个镜像共 34 层的匿名 HEAD 及长度检查通过；未在本机执行完整 Docker pull。注册表清单摘要、配置 image ID、平台及源码 revision 与被验证镜像一致；没有将本地 image ID 当作 registry digest。该次未重跑 ARM64、VM 重启、原生浏览器、systemd 或生产模型/扣费验收；此前各检查仍以各自记录为准。主控运行凭据修复尚需用户自行推送和部署，未以镜像发布声称生产故障已恢复。

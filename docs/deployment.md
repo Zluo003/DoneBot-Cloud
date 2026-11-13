@@ -77,7 +77,7 @@ sudo journalctl -u sub2api -n 100 --no-pager
 
 ## 每台 Linux 节点
 
-需要 Node.js 24.13–24.x、Docker Engine、nftables、e2fsprogs（mkfs.ext4）、util-linux（mount/umount/flock/fallocate）、root 管理的工程目录 `/opt/donebot-cloud`，以及非特权服务账户/组 `donebot-cloud`。已实测 Docker 26.1.5（iptables-nft）和 nftables 1.1.3；其他防火墙后端需先隔离验证。
+需要 Node.js 24.13–24.x、Docker Engine、nftables、e2fsprogs（mkfs.ext4）、util-linux（mount/umount/flock/fallocate）、root 管理的工程目录 `/opt/donebot-cloud`，以及非特权服务账户/组 `donebot-cloud`。已实测 Docker 26.1.5（iptables-nft）/ nftables 1.1.3，以及一次性 GitHub Ubuntu runner 上的 Docker 28.0.4 / nftables 1.0.9。节点代码需包含 nft 常规文件事务和 Docker 能力名称兼容修复；其他防火墙后端需先隔离验证。
 
 ```sh
 cd /opt/donebot-cloud
@@ -95,7 +95,29 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 
 只允许手动触发，不随提交自动升级节点。成功后 Summary 和 artifact 中提供 `registry-images.env`、发布清单及 Linux/桌面验证结果；节点先拉取清单中的两个 `repository@sha256:…`，再将 env 的值合入 `agent.env`。升级已有实例仍需执行下述受控镜像升级，不能直接改配置启动旧容器。该流程不修改 DoneBot 仓库源码，不发布原版 `cloud-home`。
 
-运行这些 Actions 的仓库需有可用计算额度；公开仓库使用标准托管 runner 的构建计算免费，见 [GitHub 计费说明](https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions)。DoneBot 公开不会改变本仓库的可见性或计费。仓库与 GHCR 包可见性分别配置；公开镜像支持匿名拉取，私有镜像需要登录。本地与 workflow 校验不代表这条新流程已经构建或发布成功，以具体 run 和发布清单为准。
+运行这些 Actions 的仓库需有可用计算额度；公开仓库使用标准托管 runner 的构建计算免费，见 [GitHub 计费说明](https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions)。DoneBot 与本仓库现均已公开，Cloud 可见性变更已获用户明确授权。仓库与 GHCR 包可见性分别配置；公开镜像支持匿名拉取，私有镜像需要登录。2026-11-13 的 [run 43387570590](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43387570590) 已构建、验证并发布 amd64 双镜像，下列摘要对应其 artifact 发布清单。
+
+#### 已发布的 amd64 镜像
+
+DoneBot 源码固定为 `e9d24ff50f10e5772409089386f202e2b1813447`，Cloud 验证代码为 `7107d2690353319ef446fb7e43aa4815d9462202`。以下两个镜像已完成真实双用户服务、出网隔离和专属桌面验证；注册表清单及镜像配置支持匿名读取，无需节点登录 GitHub。此次发布为 `linux/amd64`，不用于 arm64 节点。
+
+将 [固定镜像配置](../deploy/images/2026-11-13-amd64.env) 中的两个值合入 `/etc/donebot-cloud/agent.env`：
+
+```dotenv
+CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:bff0b6888023791b3ceddb90a7601d50d5ec2f90f8f85a6f6ffa531ba770d5c0
+CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:0cb2a79746b823fadf077e86cf5ae7acc88c7935459f4a1736e8778951b7c1ad
+```
+
+在 amd64 节点上拉取，无需安装 DoneBot 源码或编译依赖：
+
+```sh
+docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:bff0b6888023791b3ceddb90a7601d50d5ec2f90f8f85a6f6ffa531ba770d5c0
+docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:0cb2a79746b823fadf077e86cf5ae7acc88c7935459f4a1736e8778951b7c1ad
+```
+
+镜像发布不会自动更新节点。同步包含 Linux 兼容修复的 Cloud 代码；新节点使用上述摘要，已有实例按本文“节点镜像滚动升级”和“桌面镜像更新”分别准备，保留数据后再启动。原 `API_KEY_NOT_FOUND` 仍需发布、部署 donebot-api 的运行凭据修复，更新镜像不能替代主控修复。该流水线不验证生产账户扣费或生产节点。
+
+#### 自行构建与离线包
 
 在任意构建机准备一次两个镜像，再分发到同架构节点，不必每台节点安装 DoneBot 源码和编译环境。构建机需要 Node.js 24.13–24.x、Git、tar、Docker，以及已安装依赖的干净 DoneBot checkout（首次在该 checkout 执行 `pnpm install --frozen-lockfile`）。`REVIEWED_DONEBOT_SHA` 必须是管理员核对过的完整 40 位提交，`--platform` 与节点架构一致。下面示例用于 amd64：
 

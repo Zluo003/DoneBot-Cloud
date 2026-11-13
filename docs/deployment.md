@@ -84,7 +84,35 @@ cd /opt/donebot-cloud
 npm ci --omit=dev
 ```
 
-镜像复用 DoneBot 的 `server` target，从验证过的源码构建/发布后按不可变摘要配置。不要使用 `cloud-home` target，也不要使用可变 `latest`：
+### 镜像准备与离线分发
+
+DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会构建并发布服务镜像；原版 `cloud-home` 镜像不用于自有 Cloud，当前流程也不发布自有 Cloud 的专属桌面镜像。2026-11-13 检查指定源码 `e9d24ff50f10e5772409089386f202e2b1813447` 的 [GitHub 构建](https://github.com/Zluo003/donebot/actions/runs/43370375981) 时，任务尚未启动，annotation 提示账户账单失败或支出额度不足。没有生成可供本次部署使用的新发布产物。修复账单/额度后可重跑；公开仓库使用标准托管 runner 的构建计算免费，见 [GitHub 计费说明](https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions)。仓库可见性与 GHCR 包可见性分别配置；公开镜像支持匿名拉取，私有镜像需要登录。
+
+在任意构建机准备一次两个镜像，再分发到同架构节点，不必每台节点安装 DoneBot 源码和编译环境。构建机需要 Node.js 24.13–24.x、Git、tar、Docker，以及已安装依赖的干净 DoneBot checkout（首次在该 checkout 执行 `pnpm install --frozen-lockfile`）。`REVIEWED_DONEBOT_SHA` 必须是管理员核对过的完整 40 位提交，`--platform` 与节点架构一致。下面示例用于 amd64：
+
+```sh
+npm run images:prepare -- \
+  --source /path/to/DoneBot \
+  --revision "$REVIEWED_DONEBOT_SHA" \
+  --platform linux/amd64 \
+  --context default \
+  --output /srv/donebot-images-UNIQUE
+```
+
+输出目录必须尚不存在且位于源码仓库外，父目录需存在。可先加 `--dry-run` 核对来源；该模式不调用 Docker。ARM64 节点使用 `--platform linux/arm64`；跨架构构建需要构建机已配置相应的 BuildKit 模拟支持。工具从指定 Git 提交导出源码快照，不把工作目录、`.env` 或用户数据送入构建上下文；桌面生成器在临时 HOME 中运行。构建使用原版 `server` target 和默认构建参数，不注入 fixture 引擎或另复制服务。两个镜像的源码标签、实际 image ID 和平台核对成功后，才生成完成清单。
+
+输出包含 `manifest.json`、`agent-images.env`、`desktop/Dockerfile`、`images.tar` 和 `checksums.txt`。将整个目录安全复制到节点，在节点执行：
+
+```sh
+cd /path/to/copied-bundle
+sha256sum -c checksums.txt
+docker load --input images.tar
+cat agent-images.env
+```
+
+把 `agent-images.env` 的两个值合入下述 root 管理的 `agent.env`。它们是本地不可变 image ID，不是 registry digest；离线包在目标节点加载后可直接使用。保留清单和可信渠道取得的校验和，不能把本地 ID 拼成 `repository@sha256:…`。只在当前构建机使用时可加 `--no-archive`；这时不生成 tar/校验和。工具保留构建产物，不部署、启动、清理旧镜像或覆盖既有配置；已有实例更换镜像仍按下述受控升级流程操作。
+
+也可以沿用注册表方式。镜像复用 DoneBot 的 `server` target，从验证过的源码构建/发布后按不可变摘要配置。不要使用 `cloud-home` target，也不要使用可变 `latest`：
 
 ```sh
 docker build --target server -t your-registry/donebot:reviewed /path/to/DoneBot
@@ -100,7 +128,7 @@ node scripts/desktop-dockerfile.mjs /path/to/DoneBot "$desktop_build_dir/Dockerf
 docker build -t your-registry/donebot-desktop:reviewed "$desktop_build_dir"
 ```
 
-发布并核对桌面镜像摘要后，配置 `CLOUD_DESKTOP_IMAGE=repository@sha256:实际摘要`。当前适配要求 DoneBot 原版桌面 labels 对应 CUA 0.37.0、image-layer 8 及固定基础摘要。节点不会根据用户输入拉取镜像；部署前由管理员加载或拉取已审核镜像。配置后 readiness 同时检查桌面镜像。生产摘要不能使用 fixture 的本地 image ID 冒充注册表摘要。
+发布并核对桌面镜像摘要后，配置 `CLOUD_DESKTOP_IMAGE=repository@sha256:实际摘要`。当前适配要求 DoneBot 原版桌面 labels 对应 CUA 0.37.0、image-layer 8 及固定基础摘要。节点不会根据用户输入拉取镜像；部署前由管理员加载或拉取已审核镜像。配置后 readiness 同时检查桌面镜像。本地 image ID 与注册表摘要用途不同，不得混用。
 
 agent 环境文件 `/etc/donebot-cloud/agent.env`（root 可读）：
 

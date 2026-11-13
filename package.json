@@ -25,6 +25,7 @@
     "verify:service": "node scripts/verify-service.mjs",
     "verify:desktop": "node scripts/verify-desktop.mjs",
     "desktop:dockerfile": "node scripts/desktop-dockerfile.mjs",
+    "images:prepare": "node scripts/prepare-images.mjs",
     "verify:backup-groups": "node scripts/verify-backup-groups.mjs"
   },
   "dependencies": {

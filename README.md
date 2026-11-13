@@ -63,6 +63,10 @@ DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU 
 
 完整命令、持久配置、旧 unit 兼容步骤及节点环境文件见 [部署说明](docs/deployment.md)，回退边界见 [发布说明](docs/release-runbook.md)。网关在线更新只更新网关程序；Cloud 节点代码及 DoneBot/桌面镜像按节点升级流程单独发布。
 
+镜像可以在一台构建机准备一次，再分发给同架构节点。运行 `npm run images:prepare -- --source /path/to/DoneBot --revision <已审核的完整SHA> --platform linux/amd64 --output /path/to/new-bundle`，会复用原版服务 Dockerfile 和桌面生成器，输出两个固定 image ID、离线 `images.tar`、校验和及 `agent-images.env`。DoneBot 源码需干净且已安装依赖，构建机需支持目标架构；节点只需校验和 `docker load`，见 [镜像准备](docs/deployment.md#镜像准备与离线分发)。这条命令不发布镜像，也不修改正在运行的节点。
+
+启动请求返回 202 和节点 `/healthz` 成功都不代表实例已经运行。`runtime-credential` 的业务 404、主控版本核对及升级步骤见 [启动失败诊断](docs/runtime-credential-diagnostics.md)。
+
 “Cloud 管理”的节点区可随时查看主控公钥，添加节点或轮换令牌时也会一并显示。未配置有效签名 seed 时，页面提示配置方法并禁止添加/轮换，已有节点仍可管理。空节点支持确认删除：立即撤销令牌并保留历史记录；仍有实例（含停机或回收失败）的节点须先完成回收。删除登记不会卸载服务器上的 worker 和 agent。
 
 ## 本地运行

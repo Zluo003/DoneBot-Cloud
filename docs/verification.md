@@ -259,3 +259,19 @@ DoneBot 相关 9 个单元测试文件共 254 项通过，覆盖本地桌面、�
 双盘自动备份另以 `verify:backup-groups` 验证：两个真实 128 MiB ext4 文件系统，首次桌面快照失败后按原键恢复、无重复快照，连续轮换只保留三组，淘汰组的两份文件均删除，保留组可恢复两盘不同标记。该脚本不启动桌面容器，不替代上述完整桌面验证。备份认证失败时也会清理尚未提交的临时恢复盘。
 
 本轮机器可读结果见 [desktop JSON](verification/desktop-2026-11-12.json)，其中分别记录最后桌面镜像验证和禁网 VM 重启所用运行镜像。
+
+## 2026-11-13：运行凭据与启动诊断回归
+
+本轮在 macOS、Node.js 24.18.0 和 Go 测试进程中验证；PostgreSQL 17 每个 fixture 使用 `/tmp/dbc-*` 新数据目录、独立 Unix socket、禁用 TCP 和合成用户/余额，结束后精确停止并删除自有资源。未连接生产数据库、测试账户或节点；未启动用户 Docker Desktop、专属 Linux VM 或新的真实镜像构建。
+
+- `npm test`：15 项全部通过，包含已有双用户代理/停启和新增启动诊断、退避及镜像准备工具检查。
+- donebot-api `go test ./internal/service -run '^TestDoneBot' -count=1`：通过。新增回归在修复前复现普通管理入口导致的 `API_KEY_NOT_FOUND`；修复后托管凭据重复验证成功，普通查询仍拒绝，过期、禁用、旋转及 owner/group 不符继续拒绝。
+- `go test ./internal/server/routes -run '^TestCloudNodeAndUserRoutesHaveSeparateAuthentication$' -count=1`：通过，覆盖运行凭据、claim、report、confirm-purge 路由注册及用户/节点鉴权分离。
+- `CLOUD_BILLING_PG_FIXTURE=1 go test -tags=integration ./internal/handler -run '^TestCloudRuntimeCredentialWithRealManagedKeys$' -count=1`：通过。使用真实 PostgreSQL、安装服务、APIKeyService 和 repository，以及真实 CloudNode/RequestLogger 处理器；首次和重复签发、停机拒绝、再次启动签发、仅一笔扣费和一个托管 key、节点身份拒绝、错误实例拒绝、安装撤销拒绝、业务阶段和 request ID 均通过。凭据只在测试进程内使用，不写证据或日志。此测试不启动 Docker/浏览器。
+- `CLOUD_BILLING_PG_FIXTURE=1 CLOUD_BILLING_NODE_FIXTURE=1 go test -tags=integration ./internal/cloudbilling -run '^(TestPostgresRuntimeCredentialsStayBoundToAssignedNode|TestPostgresWithTwoNodeWorkers|TestPostgresNodeCredentialRotationAndRevocation)$' -count=1`：通过。覆盖 12 并发凭据获取、加密落库和节点绑定、两个真实 Node worker 加合成 agent/runtime 的持久状态与停启/删除、节点 token 轮换撤销；新增失败日志的 request ID、reason、step 与无凭据字段检查。
+
+worker 的新增回归明确验证业务 404 与无结构 HTTP 404 可区分，未知 reason/metadata/message 不进入日志，report 失败与接收失败结果分别可见，凭据失败时 agent 未启动，重复 claim 不绕过退避、恢复后可访问、停止后访问拒绝。模拟部分创建后失败时，worker 不授权代理，丢失租约仍会停掉可能残留的运行资源。测试还保留“节点 healthz 成功而实例启动失败”的案例，防止混淆。
+
+镜像准备工具使用临时合成 Git 仓库和模拟 Docker 检查：完整 SHA 与干净源码约束、原版 server target、两类镜像、平台不符时不生成成功清单、离线包 SHA-256 和 env 输出。另对真实 DoneBot `e9d24ff50f10e5772409089386f202e2b1813447` 执行只读 dry-run，并在临时 HOME 导出真实原版桌面 Dockerfile，核对 CUA 0.37.0 / image-layer 8 labels。没有重新构建镜像；这些检查不能替代完整构建、镜像启动或目标 Linux 架构验收。
+
+线上业务响应与已复现源码缺陷一致，主控二进制 SHA 尚未取得；不把本地通过当作生产恢复证据。详见 [故障诊断与上线复核](runtime-credential-diagnostics.md)。GitHub 构建未启动的账单/额度问题与凭据 404 相互独立；仓库公开、账单修改、任务重跑和镜像发布均未执行。

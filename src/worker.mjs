@@ -2,32 +2,58 @@ import { createServer } from 'node:http';
 import { createPublicKey, verify } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Fault, close, hash, instanceID, json, listen, privateDir, socketJSON } from './common.mjs';
+import { Fault, body, close, hash, instanceID, json, listen, privateDir, socketJSON } from './common.mjs';
 import { httpProxy, proxyHeaders, safePath, wsProxy, wsServer } from './proxy.mjs';
+import { errorFields, masterFailure } from './worker-errors.mjs';
 
-export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey, stateDir, agentSocket, host = '127.0.0.1', port = 18991, development = false, pollMs = 3000, runtimeCredentials = !development }) {
+export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey, stateDir, agentSocket, host = '127.0.0.1', port = 18991, development = false, pollMs = 3000, runtimeCredentials = !development, log = entry => console.log(JSON.stringify(entry)) }) {
   instanceID(nodeId); const url = new URL(masterOrigin);
   if (url.origin !== masterOrigin || url.protocol !== 'https:' && !(development && url.protocol === 'http:' && url.hostname === '127.0.0.1')) throw new Error('worker requires an HTTPS master origin');
   const rawKey = Buffer.from(publicKey, 'base64'); if (rawKey.length !== 32 || typeof nodeToken !== 'string' || nodeToken.length < 32) throw new Error('invalid worker enrollment');
   const key = createPublicKey({ key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), rawKey]), type: 'spki', format: 'der' });
   privateDir(stateDir); const manifest = join(stateDir, 'owned.json');
   const owned = new Set(existsSync(manifest) ? JSON.parse(readFileSync(manifest)) : []); for (const id of owned) instanceID(id);
-  const leases = new Map(), started = new Set(), tasks = new Map(), streams = new Set(), wss = wsServer();
+  const leases = new Map(), started = new Set(), needsStop = new Set(), retries = new Map(), tasks = new Map(), streams = new Set(), wss = wsServer();
   let current = null, polling = false, stopped = false, lastMasterContact = 0;
   const persist = () => { writeFileSync(manifest + '.tmp', JSON.stringify([...owned]), { mode: 0o600 }); renameSync(manifest + '.tmp', manifest); };
   const allowed = id => !stopped && (leases.get(id)?.until || 0) > Date.now();
+  const record = (event, fields = {}) => { try { log({ app: 'donebot-cloud-worker', event, node_id: nodeId, ...fields }); } catch { /* Diagnostics cannot interrupt lease fencing. */ } };
   function serial(id, task) { const next = (tasks.get(id) || Promise.resolve()).catch(() => {}).then(task); tasks.set(id, next); next.finally(() => { if (tasks.get(id) === next) tasks.delete(id); }).catch(() => {}); return next; }
   const execute = async (id, action) => {
     const value = action === 'start' || action === 'lease' ? { authorized_until: leases.get(id)?.until } : {};
     if (action === 'start' && runtimeCredentials) value.gateway = await call('runtime-credential', { instance_id: instanceID(id) });
-    return socketJSON(agentSocket, `/v1/instances/${instanceID(id)}/${action}`, 'POST', value);
+    if (action === 'start') needsStop.add(id);
+    const result = await socketJSON(agentSocket, `/v1/instances/${instanceID(id)}/${action}`, 'POST', value);
+    if (action === 'stop' || action === 'purge') { needsStop.delete(id); started.delete(id); }
+    return result;
   };
   async function call(verb, value) {
     let res;
     try { res = await fetch(`${masterOrigin}/api/v1/donebot/cloud/nodes/${nodeId}/${verb}`, { method: 'POST', headers: { authorization: `Bearer ${nodeToken}`, 'content-type': 'application/json' }, body: JSON.stringify(value), redirect: 'error', signal: AbortSignal.timeout(10000) }); } catch { throw new Fault(503, 'master_unavailable'); }
-    const text = await res.text(); if (text.length > 1024 * 1024) throw new Fault(502, 'invalid_master_response');
-    let result; try { result = JSON.parse(text); } catch { throw new Fault(502, 'invalid_master_response'); }
-    if (!res.ok || result.code !== 0) throw new Fault(res.status, 'master_request_failed'); return result.data;
+    let result;
+    try { result = await body(res.body, 1024 * 1024); } catch {
+      if (!res.ok) throw masterFailure(res);
+      throw new Fault(502, 'invalid_master_response');
+    }
+    if (!res.ok || result?.code !== 0) throw masterFailure(res, result);
+    return result.data;
+  }
+  async function start(id) {
+    const generation = leases.get(id)?.generation, prior = retries.get(id);
+    if (prior?.generation === generation && prior.until > Date.now()) throw prior.error;
+    try {
+      await execute(id, 'start');
+      if (!allowed(id) || leases.get(id)?.generation !== generation) { await execute(id, 'stop'); throw new Fault(403, 'runtime_lease_expired'); }
+      started.add(id); retries.delete(id);
+      record('instance_started', { instance_id: id });
+    } catch (error) {
+      started.delete(id);
+      const attempts = prior?.generation === generation ? prior.attempts + 1 : 1;
+      const delay = Math.min(300000, 15000 * 2 ** Math.min(attempts - 1, 5));
+      retries.set(id, { generation, attempts, until: Date.now() + delay, error });
+      record('instance_start_failed', { instance_id: id, ...errorFields(error), attempt: attempts, retry_in_ms: delay });
+      throw error;
+    }
   }
   // A restarted worker starts with no authority to keep any recorded runtime running.
   for (const id of owned) await execute(id, 'stop');
@@ -66,24 +92,32 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
     try {
       if (op.action === 'start') {
         if (!allowed(op.instance_id) || leases.get(op.instance_id).generation !== op.generation) throw new Fault(403, 'runtime_lease_expired');
-        owned.add(op.instance_id); persist(); await serial(op.instance_id, () => execute(op.instance_id, 'start'));
-        if (!allowed(op.instance_id)) { await serial(op.instance_id, () => execute(op.instance_id, 'stop')); throw new Fault(403, 'runtime_lease_expired'); }
-        started.add(op.instance_id);
+        owned.add(op.instance_id); persist(); await serial(op.instance_id, () => start(op.instance_id));
       } else {
-        started.delete(op.instance_id); leases.delete(op.instance_id);
+        started.delete(op.instance_id); leases.delete(op.instance_id); retries.delete(op.instance_id);
         if (op.action === 'purge') await call('confirm-purge', { operation_id: op.id, lease_token: op.lease_token });
         await serial(op.instance_id, () => execute(op.instance_id, op.action === 'purge' ? 'purge' : 'stop'));
         if (op.action === 'purge') { owned.delete(op.instance_id); persist(); }
       }
       task.result = '';
-    } catch (e) { if (owned.has(op.instance_id)) started.add(op.instance_id); task.result = /^[a-z_]{1,100}$/.test(e.code || '') ? e.code : 'runtime_operation_failed'; }
+      record('operation_completed', { operation_id: op.id, instance_id: op.instance_id, action: op.action });
+    } catch (e) {
+      task.result = /^[a-z_]{1,100}$/.test(e.code || '') ? e.code : 'runtime_operation_failed';
+      record('operation_failed', { operation_id: op.id, instance_id: op.instance_id, action: op.action, ...errorFields(e) });
+    }
   }
   async function poll() {
     if (polling || stopped) return; polling = true;
     try {
       if (current?.result !== null && current) {
-        try { await call('report', { operation_id: current.op.id, lease_token: current.op.lease_token, error: current.result }); current = null; }
-        catch (e) { if (e.status === 409) current = null; else throw e; }
+        try {
+          await call('report', { operation_id: current.op.id, lease_token: current.op.lease_token, error: current.result });
+          record('operation_reported', { operation_id: current.op.id, instance_id: current.op.instance_id, outcome: current.result ? 'failed' : 'succeeded', code: current.result ? errorFields({ code: current.result }).code : undefined });
+          current = null;
+        } catch (e) {
+          record('operation_report_failed', { operation_id: current.op.id, instance_id: current.op.instance_id, ...errorFields(e) });
+          if (e.status === 409) current = null; else throw e;
+        }
       }
       const claimStarted = Date.now();
       const response = await call('claim', { running: current ? [{ operation_id: current.op.id, lease_token: current.op.lease_token }] : [] });
@@ -96,18 +130,19 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
         if (Number.isFinite(until) && until > Date.now()) leases.set(instanceID(lease.instance_id), { until, generation: lease.generation });
       }
       await Promise.all([...owned].filter(allowed).map(async id => { const observed = await execute(id, 'lease'); if (observed.state !== 'running') started.delete(id); }));
-      for (const id of owned) if (allowed(id) && !started.has(id) && !tasks.has(id) && current?.op.instance_id !== id) {
-        serial(id, async () => { await execute(id, 'start'); if (allowed(id)) started.add(id); else await execute(id, 'stop'); }).catch(() => started.add(id));
+      for (const id of owned) if (allowed(id) && !started.has(id) && !tasks.has(id) && current?.op.instance_id !== id && response.command?.instance_id !== id && !(retries.get(id)?.generation === leases.get(id)?.generation && retries.get(id).until > Date.now())) {
+        serial(id, () => start(id)).catch(() => {});
       }
       if (!current && response.command) void command(response.command).catch(() => {});
     } finally { polling = false; }
   }
   const fence = setInterval(() => {
     for (const item of streams) if (!allowed(item.id)) { streams.delete(item); item.kill(); }
-    for (const id of started) if (!allowed(id) && !tasks.has(id)) { started.delete(id); serial(id, () => execute(id, 'stop')).catch(() => started.add(id)); }
+    for (const id of needsStop) if (!allowed(id) && !tasks.has(id)) { started.delete(id); serial(id, () => execute(id, 'stop')).catch(error => record('instance_fence_failed', { instance_id: id, ...errorFields(error) })); }
   }, 250); fence.unref();
-  await poll().catch(() => {});
-  const timer = setInterval(() => poll().catch(() => {}), pollMs); timer.unref();
+  const pollSafely = () => poll().catch(error => record('master_poll_failed', errorFields(error)));
+  await pollSafely();
+  const timer = setInterval(pollSafely, pollMs); timer.unref();
   return { origin: `http://${host}:${address.port}`, server, poll, allowed, async close() {
     stopped = true; clearInterval(timer); clearInterval(fence); leases.clear(); for (const item of streams) item.kill();
     await close(server); for (const id of owned) await serial(id, () => execute(id, 'stop')).catch(() => {}); await Promise.allSettled([...tasks.values()]); wss.close();

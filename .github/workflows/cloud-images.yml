@@ -1,0 +1,118 @@
+name: Cloud service and desktop images
+
+on:
+  workflow_dispatch:
+    inputs:
+      donebot_revision:
+        description: Reviewed full DoneBot commit SHA (40 lowercase hex characters)
+        required: true
+        type: string
+      platform:
+        description: Target node platform
+        required: true
+        default: linux/amd64
+        type: choice
+        options:
+          - linux/amd64
+          - linux/arm64
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-images-${{ inputs.donebot_revision }}-${{ inputs.platform }}
+  cancel-in-progress: false
+
+jobs:
+  images:
+    name: Build, verify and publish both Cloud images
+    runs-on: ${{ inputs.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DONEBOT_REVISION: ${{ inputs.donebot_revision }}
+      IMAGE_PLATFORM: ${{ inputs.platform }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate reviewed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DONEBOT_REVISION" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$IMAGE_PLATFORM" == linux/amd64 || "$IMAGE_PLATFORM" == linux/arm64 ]]
+          echo "BUNDLE=$RUNNER_TEMP/donebot-images" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Zluo003/donebot
+          ref: ${{ inputs.donebot_revision }}
+          path: sources/DoneBot
+          persist-credentials: false
+      - uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+      - name: Prepare dependencies and isolated checks
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          pnpm --dir sources/DoneBot install --frozen-lockfile --ignore-scripts
+          sudo apt-get update -qq
+          sudo apt-get install -y nftables e2fsprogs util-linux
+      - name: Build service and original desktop images
+        run: |
+          set -euo pipefail
+          node scripts/prepare-images.mjs --source sources/DoneBot --revision "$DONEBOT_REVISION" --platform "$IMAGE_PLATFORM" --output "$BUNDLE" --no-archive
+      - name: Verify real Linux service isolation and Cloud desktops
+        run: |
+          set -euo pipefail
+          source "$BUNDLE/agent-images.env"
+          sudo env PATH="$PATH" CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$CLOUD_DONEBOT_IMAGE" node scripts/verify-linux.mjs | tee "$BUNDLE/linux-verification.jsonl"
+          sudo env PATH="$PATH" CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$CLOUD_DONEBOT_IMAGE" CLOUD_DESKTOP_IMAGE="$CLOUD_DESKTOP_IMAGE" node scripts/verify-desktop.mjs | tee "$BUNDLE/desktop-verification.jsonl"
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish verified immutable images
+        run: |
+          set -euo pipefail
+          source "$BUNDLE/agent-images.env"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          arch="${IMAGE_PLATFORM#linux/}"
+          service_repo="ghcr.io/$owner/donebot-cloud-service"
+          desktop_repo="ghcr.io/$owner/donebot-cloud-desktop"
+          tag="sha-$DONEBOT_REVISION-$arch"
+          docker tag "$CLOUD_DONEBOT_IMAGE" "$service_repo:$tag"
+          docker tag "$CLOUD_DESKTOP_IMAGE" "$desktop_repo:$tag"
+          docker push "$service_repo:$tag"
+          docker push "$desktop_repo:$tag"
+          service_digest=$(docker image inspect "$service_repo:$tag" | jq -er --arg prefix "$service_repo@sha256:" '.[0].RepoDigests | map(select(startswith($prefix))) | first')
+          desktop_digest=$(docker image inspect "$desktop_repo:$tag" | jq -er --arg prefix "$desktop_repo@sha256:" '.[0].RepoDigests | map(select(startswith($prefix))) | first')
+          printf 'CLOUD_DONEBOT_IMAGE=%s\nCLOUD_DESKTOP_IMAGE=%s\n' "$service_digest" "$desktop_digest" > "$BUNDLE/registry-images.env"
+          jq --arg service "$service_digest" --arg desktop "$desktop_digest" --arg cloud "$GITHUB_SHA" '. + {cloud_revision: $cloud, registry: {service: $service, desktop: $desktop}}' "$BUNDLE/manifest.json" > "$BUNDLE/published-manifest.json"
+          {
+            echo 'Verified Cloud images'
+            echo
+            echo "DoneBot source: $DONEBOT_REVISION"
+            echo "Platform: $IMAGE_PLATFORM"
+            echo
+            echo '```dotenv'
+            cat "$BUNDLE/registry-images.env"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cloud-images-${{ inputs.platform == 'linux/arm64' && 'arm64' || 'amd64' }}-${{ inputs.donebot_revision }}
+          path: |
+            ${{ env.BUNDLE }}/published-manifest.json
+            ${{ env.BUNDLE }}/registry-images.env
+            ${{ env.BUNDLE }}/*-verification.jsonl
+          if-no-files-found: error
+          retention-days: 14

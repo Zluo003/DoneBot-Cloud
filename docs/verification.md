@@ -275,3 +275,9 @@ worker 的新增回归明确验证业务 404 与无结构 HTTP 404 可区分，�
 镜像准备工具使用临时合成 Git 仓库和模拟 Docker 检查：完整 SHA 与干净源码约束、原版 server target、两类镜像、平台不符时不生成成功清单、离线包 SHA-256 和 env 输出。另对真实 DoneBot `e9d24ff50f10e5772409089386f202e2b1813447` 执行只读 dry-run，并在临时 HOME 导出真实原版桌面 Dockerfile，核对 CUA 0.37.0 / image-layer 8 labels。没有重新构建镜像；这些检查不能替代完整构建、镜像启动或目标 Linux 架构验收。
 
 线上业务响应与已复现源码缺陷一致，主控二进制 SHA 尚未取得；不把本地通过当作生产恢复证据。详见 [故障诊断与上线复核](runtime-credential-diagnostics.md)。GitHub 构建未启动的账单/额度问题与凭据 404 相互独立；仓库公开、账单修改、任务重跑和镜像发布均未执行。
+
+## 2026-11-13：公开仓库后的镜像 CI 复核
+
+用户随后自行将 DoneBot 仓库设为公开。只读核实后，重新运行原 Docker workflow 的 run `43370375981`（attempt 2，DoneBot 完整 SHA 仍为 `e9d24ff50f10e5772409089386f202e2b1813447`）。GitHub 托管的临时 amd64/arm64 runner 均实际执行了构建；arm64 构建与 server/UI/DuckDB/浏览器启动检查成功，amd64 的构建、server/UI、开源版、浏览器、服务回环监听和 server+Caddy 配对检查成功。后续原版 `cloud-home` 检查中的引擎列表断言返回 false，任务失败，发布 job skipped；没有将 CI 本地 image ID 称为已发布镜像。
+
+本仓库新增手动 `cloud-images.yml`，限定完整 DoneBot SHA 和 amd64/arm64 平台。它复用原版 Dockerfile/桌面生成器及已有 `verify:linux`、`verify:desktop`，所有验证完成后才执行 registry push；完成清单记录两个真实注册表摘要。新 workflow 的 YAML、各 bash 块及 actionlint 校验用于检查流程配置，不代替真实运行。此次未修改或推送 DoneBot 仓库代码。DoneBot-Cloud 当前仍为私有仓库，其 Actions 额度与 DoneBot 的公开状态分别判断。

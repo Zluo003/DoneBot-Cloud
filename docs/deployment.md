@@ -86,7 +86,16 @@ npm ci --omit=dev
 
 ### 镜像准备与离线分发
 
-DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会构建并发布服务镜像；原版 `cloud-home` 镜像不用于自有 Cloud，当前流程也不发布自有 Cloud 的专属桌面镜像。2026-11-13 检查指定源码 `e9d24ff50f10e5772409089386f202e2b1813447` 的 [GitHub 构建](https://github.com/Zluo003/donebot/actions/runs/43370375981) 时，任务尚未启动，annotation 提示账户账单失败或支出额度不足。没有生成可供本次部署使用的新发布产物。修复账单/额度后可重跑；公开仓库使用标准托管 runner 的构建计算免费，见 [GitHub 计费说明](https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions)。仓库可见性与 GHCR 包可见性分别配置；公开镜像支持匿名拉取，私有镜像需要登录。
+DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会构建并发布服务镜像；原版 `cloud-home` 镜像不用于自有 Cloud，当前流程也不发布自有 Cloud 的专属桌面镜像。2026-11-13 首次检查指定源码 `e9d24ff50f10e5772409089386f202e2b1813447` 的 [GitHub 构建](https://github.com/Zluo003/donebot/actions/runs/43370375981) 时，任务被账单/额度阻止启动。用户将 DoneBot 公开后，同一 run 的第 2 次执行已通过 amd64 服务构建/启动、浏览器、配对和网络检查，以及 arm64 构建/启动检查；随后原版 `cloud-home` 的引擎列表断言失败，GHCR 发布被跳过。构建成功与可拉取镜像已经发布是两个不同结果。
+
+自有 Cloud 的双镜像发布入口位于本仓库 Actions → **Cloud service and desktop images** → **Run workflow**。填入审核过的 DoneBot 完整 SHA 和节点平台（当前测试节点为 `linux/amd64`）；流程会复用下述镜像准备工具，先运行真实一次性 Linux 双用户隔离和 Cloud 桌面验证，再发布：
+
+- `ghcr.io/<仓库所有者>/donebot-cloud-service:sha-<DoneBot完整SHA>-<架构>`
+- `ghcr.io/<仓库所有者>/donebot-cloud-desktop:sha-<DoneBot完整SHA>-<架构>`
+
+只允许手动触发，不随提交自动升级节点。成功后 Summary 和 artifact 中提供 `registry-images.env`、发布清单及 Linux/桌面验证结果；节点先拉取清单中的两个 `repository@sha256:…`，再将 env 的值合入 `agent.env`。升级已有实例仍需执行下述受控镜像升级，不能直接改配置启动旧容器。该流程不修改 DoneBot 仓库源码，不发布原版 `cloud-home`。
+
+运行这些 Actions 的仓库需有可用计算额度；公开仓库使用标准托管 runner 的构建计算免费，见 [GitHub 计费说明](https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions)。DoneBot 公开不会改变本仓库的可见性或计费。仓库与 GHCR 包可见性分别配置；公开镜像支持匿名拉取，私有镜像需要登录。本地与 workflow 校验不代表这条新流程已经构建或发布成功，以具体 run 和发布清单为准。
 
 在任意构建机准备一次两个镜像，再分发到同架构节点，不必每台节点安装 DoneBot 源码和编译环境。构建机需要 Node.js 24.13–24.x、Git、tar、Docker，以及已安装依赖的干净 DoneBot checkout（首次在该 checkout 执行 `pnpm install --frozen-lockfile`）。`REVIEWED_DONEBOT_SHA` 必须是管理员核对过的完整 40 位提交，`--platform` 与节点架构一致。下面示例用于 amd64：
 

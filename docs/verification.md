@@ -325,3 +325,15 @@ Cloud 28 项单元测试和 DoneBot 59 项针对性测试通过，类型、lint�
 一次性 Debian 13 ARM64 VM 使用本轮服务 bundle 覆盖原缓存测试镜像，仅构建本地 fixture 镜像。真实双用户 Linux 检查通过：CUA 截图、原 MCP、UID/网络/卷/socket 隔离、文件下载、VNC、查看者排除命令控制、停启持久化、双盘备份及损坏/中断恢复、默认容量提高后旧盘容量及恢复、租约到期断连、空闲停止和定向删除；独立磁盘 fixture 验证真实 ENOSPC、其他用户不受影响和格式化中断恢复；systemd fixture 验证必需桌面镜像、宿主挂载、锁与主进程异常退出后的停机保护。VNC 关闭测试显式发送正常关闭码 1000，以适配该桌面镜像的 KasmVNC 关闭握手。所有测试仅使用本轮临时实例，结束回收测试资源。
 
 [本轮机器记录](verification/desktop-scope-2026-11-14.json) 保留具体镜像 ID、标准配额与限制。磁盘写满测试使用小容量文件系统；没有用真实模型或生产账号验收，也未重跑 amd64 容量检查、发布镜像、部署生产或打包 DMG。历史发布摘要不包含本轮源码。
+
+
+## 2026-11-14 Cloud 管理与运行租约
+
+本轮只修改 donebot-api Cloud 后台与本项目 worker/agent，未修改 DoneBot 客户端，未更新生产主控或节点，也未重新发布镜像。
+
+- 网关前端相关 Vitest 78 项通过：独立六页面导航、原 Cloud 链接跳转、管理员路由要求、月费/保留期、节点确认及并发删除拒绝、一次性令牌离页丢弃、独立运行策略和加载失败禁用写入。`pnpm run build`（包含 i18n、vue-tsc 与 Vite）及新增组件 ESLint 通过。
+- `go test ./internal/cloudbilling ./internal/handler/admin ./internal/server/routes` 通过。`CLOUD_BILLING_PG_FIXTURE=1 go test -tags=integration ./internal/cloudbilling -count=1` 使用测试启动并清理的临时 PostgreSQL，通过默认 30 分钟、策略修改、付费截止截断、停止撤销、节点凭据撤销及既有生命周期检查。
+- `npm test` 34 项通过。新增真实 loopback HTTP 与 Unix socket、合成运行服务测试验证：长租约遇到断网/5xx/格式错误仍有效，恢复不重启运行实例，失联不本地延期，到期停机，主控 401/403 或成功空授权响应及时停机。时长通过隔离 Date 时间推进模拟，并非连续等待 30 分钟的物理断网试验；单调时钟回拨保护、过长/重复/不完整授权和请求往返耗时扣减也有回归覆盖。
+- Playwright 使用独立本机 Vite 页面和合成 Axios 数据检查实际 AppSidebar 及六页面切换，运行策略显示默认 30 分钟，未发起生产请求。截图保存在网关本地 `output/playwright/cloud-runtime-policy.png`；临时页面、开发服务和浏览器会话已清理。
+
+本轮没有重做真实 Docker 桌面隔离验证；Docker 资源执行逻辑保持原实现。新长租约仍需在维护窗口同步发布到主控、worker、agent 才对生产生效，具体顺序和失联撤销延迟见部署说明。

@@ -10,18 +10,22 @@ import { SyntheticRuntime } from '../scripts/fixtures.mjs';
 import { listen, close, body, json, hash, Fault } from '../src/common.mjs';
 import { sign } from 'node:crypto';
 
-async function credentialFixture(t) {
+async function credentialFixture(t, { leaseMs = 19000, credentialFailure = true } = {}) {
   const dir = await mkdtemp('/tmp/dbc-worker-'), runtime = new SyntheticRuntime(join(dir, 'runtime'));
   const node = randomUUID(), id = randomUUID(), op = randomUUID(), logs = [], reports = [];
   let command = { id: op, instance_id: id, generation: 1, action: 'start', lease_token: 'synthetic-operation-secret' };
   let failure = { code: '404', reason: 'API_KEY_NOT_FOUND', message: 'synthetic-secret-do-not-log', metadata: { step: 'validate_installation' } };
-  let credentials = 0, reportFailure = false, authorized = true, generation = 1;
+  if (!credentialFailure) failure = null;
+  let credentials = 0, reportFailure = false, authorized = true, generation = 1, masterMode = null;
   const gateway = { installationId: id, credential: 'synthetic-runtime-secret-do-not-log', user: { id: '101' } };
   runtime.configureGateway = async (owner, value) => { assert.equal(owner, id); assert.deepEqual(value, gateway); };
   const agentSocket = join(dir, 'agent.sock'), agent = await createAgent({ socketPath: agentSocket, runtime, development: true, requireLease: true });
   const master = createServer(async (req, res) => {
     const value = await body(req), verb = req.url.split('/').at(-1);
     res.setHeader('x-request-id', 'fixture-request-id');
+    if (typeof masterMode === 'number') return json(res, masterMode, { code: masterMode, reason: 'CLOUD_NODE_REQUIRED' });
+    if (masterMode === 'disconnect') return req.socket.destroy();
+    if (masterMode === 'malformed' && verb === 'claim') return json(res, 200, { code: 0, data: { server_time: new Date().toISOString(), leases: [{ instance_id: id, generation, authorized_until: new Date(Date.now() + leaseMs).toISOString() }, { instance_id: randomUUID(), generation: 1, authorized_until: 'invalid' }] } });
     if (verb === 'runtime-credential') {
       credentials++; assert.equal(value.instance_id, id);
       if (failure === 'html') { res.writeHead(404); return res.end('<html>synthetic-secret-do-not-log</html>'); }
@@ -33,7 +37,7 @@ async function credentialFixture(t) {
     }
     assert.equal(verb, 'claim');
     const next = command; command = null;
-    json(res, 200, { code: 0, data: { server_time: new Date().toISOString(), leases: authorized ? [{ instance_id: id, generation, authorized_until: new Date(Date.now() + 19000).toISOString() }] : [], command: next } });
+    json(res, 200, { code: 0, data: { server_time: new Date().toISOString(), leases: authorized ? [{ instance_id: id, generation, authorized_until: new Date(Date.now() + leaseMs).toISOString() }] : [], command: next } });
   });
   const address = await listen(master, { host: '127.0.0.1', port: 0 }), keys = generateKeyPairSync('ed25519');
   const origin = `http://127.0.0.1:${address.port}`;
@@ -47,7 +51,7 @@ async function credentialFixture(t) {
     return fetch(worker.origin + path, { headers: { 'x-cloud-grant': grant, 'x-cloud-origin': origin } });
   };
   return { worker, runtime, id, logs, reports, until, proxy, get credentials() { return credentials; },
-    set failure(value) { failure = value; }, set reportFailure(value) { reportFailure = value; }, set authorized(value) { authorized = value; },
+    set masterMode(value) { masterMode = value; }, set failure(value) { failure = value; }, set reportFailure(value) { reportFailure = value; }, set authorized(value) { authorized = value; },
     retry(nextGeneration = 1) { generation = nextGeneration; command = { id: op, instance_id: id, generation, action: 'start', lease_token: 'synthetic-operation-secret' }; },
     stop() { authorized = false; command = { id: randomUUID(), instance_id: id, generation: 2, action: 'stop', lease_token: 'synthetic-operation-secret' }; },
   };
@@ -137,4 +141,41 @@ test('worker readiness requires a healthy agent and recent successful master con
   agentReady = true;
   t.mock.timers.enable({ apis: ['Date'], now: Date.now() }); t.mock.timers.tick(31000);
   assert.deepEqual(await health(), { status: 503, body: { ready: false, master: false, agent: true } });
+});
+
+async function runningLongLease(t) {
+  const f = await credentialFixture(t, { leaseMs: 30 * 60000, credentialFailure: false });
+  await f.until(() => f.runtime.started.has(f.id));
+  await f.worker.poll();
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  return f;
+}
+
+test('30-minute lease survives transport and server failures, renews without restarting, and expires without local extension', async t => {
+  const f = await runningLongLease(t);
+  for (const mode of ['disconnect', 503, 'malformed']) {
+    f.masterMode = mode;
+    t.mock.timers.tick(30000);
+    await assert.rejects(f.worker.poll());
+    assert.equal(f.worker.allowed(f.id), true);
+    assert.equal((await f.runtime.status(f.id)).state, 'running');
+  }
+  f.masterMode = null;
+  await f.worker.poll();
+  assert.equal(f.runtime.started.get(f.id), 1, 'successful renewal does not replay a running instance');
+  f.masterMode = 500;
+  t.mock.timers.tick(29 * 60000);
+  await assert.rejects(f.worker.poll());
+  assert.equal(f.worker.allowed(f.id), true);
+  t.mock.timers.tick(60001);
+  assert.equal(f.worker.allowed(f.id), false, 'failed calls never extend the original deadline');
+  await f.until(() => !f.runtime.instances.has(f.id));
+});
+
+for (const rejection of [401, 403, 'empty']) test(`confirmed ${rejection} revokes a cached 30-minute lease promptly`, async t => {
+  const f = await runningLongLease(t);
+  if (rejection === 'empty') { f.authorized = false; await f.worker.poll(); }
+  else { f.masterMode = rejection; await assert.rejects(f.worker.poll()); }
+  assert.equal(f.worker.allowed(f.id), false);
+  await f.until(() => !f.runtime.instances.has(f.id));
 });

@@ -3,6 +3,7 @@ import { chmodSync, chownSync, existsSync, lstatSync, unlinkSync } from 'node:fs
 import { connect } from 'node:net';
 import { Fault, body, close, fail, instanceID, json, listen } from './common.mjs';
 import { httpProxy, proxyHeaders, safePath, wsProxy, wsServer } from './proxy.mjs';
+import { MAX_RUN_LEASE_MS, runLeaseDeadline, runLeaseValid } from './run-lease.mjs';
 
 export async function createAgent({ socketPath, runtime, publicOrigin, development = false, socketGroup, credentialCheckMs = 60000, requireLease = !development, backupIntervalMs = 0 }) {
   if (!Number.isSafeInteger(backupIntervalMs) || backupIntervalMs < 0 || backupIntervalMs > 30 * 86400000) throw new Error('invalid backup interval');
@@ -19,12 +20,12 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
   function serial(id, fn) { const next = (queues.get(id) || Promise.resolve()).catch(() => {}).then(fn); queues.set(id, next); return next; }
   function disconnect(id) { for (const item of streams) if (item.id === id) { streams.delete(item); item.kill(); } }
   function track(id) { return kill => { const item = { id, kill }; streams.add(item); return () => streams.delete(item); }; }
-  const authorized = id => !requireLease || (deadlines.get(id) || 0) > Date.now();
+  const authorized = id => !requireLease || runLeaseValid(deadlines.get(id));
   if (runtime.desktops) runtime.desktops.allowed = id => !closing && authorized(id) && active.has(id) && active.get(id).expiresAt > Date.now();
   function renew(id, value) {
     const until = value.authorized_until;
-    if (!Number.isSafeInteger(until) || until <= Date.now() || until > Date.now() + 20000) throw new Fault(403, 'invalid_runtime_lease');
-    deadlines.set(id, until);
+    if (!Number.isSafeInteger(until) || until <= Date.now() || until > Date.now() + MAX_RUN_LEASE_MS) throw new Fault(403, 'invalid_runtime_lease');
+    deadlines.set(id, runLeaseDeadline(until));
   }
   function target(req, id) {
     const origin = req.headers['x-cloud-origin'];
@@ -122,7 +123,7 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
   }, credentialCheckMs); timer.unref();
   const watchdog = setInterval(() => {
     if (!requireLease) return;
-    for (const [id, until] of deadlines) if (until <= Date.now() && !fencing.has(id)) {
+    for (const [id, lease] of deadlines) if (!runLeaseValid(lease) && !fencing.has(id)) {
       fencing.add(id);
       serial(id, async () => { if (!authorized(id)) { active.delete(id); disconnect(id); await runtime.stop(id); deadlines.delete(id); } })
         .catch(() => {}).finally(() => fencing.delete(id));

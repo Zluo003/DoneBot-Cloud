@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Fault, body, close, hash, instanceID, json, listen, privateDir, socketJSON } from './common.mjs';
 import { httpProxy, proxyHeaders, safePath, wsProxy, wsServer } from './proxy.mjs';
 import { errorFields, masterFailure } from './worker-errors.mjs';
+import { readRunLeases, runLeaseValid, runLeaseUntil } from './run-lease.mjs';
 
 export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey, stateDir, agentSocket, host = '127.0.0.1', port = 18991, development = false, pollMs = 3000, runtimeCredentials = !development, log = entry => console.log(JSON.stringify(entry)) }) {
   instanceID(nodeId); const url = new URL(masterOrigin);
@@ -16,11 +17,12 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
   const leases = new Map(), started = new Set(), needsStop = new Set(), retries = new Map(), tasks = new Map(), streams = new Set(), wss = wsServer();
   let current = null, polling = false, stopped = false, lastMasterContact = 0;
   const persist = () => { writeFileSync(manifest + '.tmp', JSON.stringify([...owned]), { mode: 0o600 }); renameSync(manifest + '.tmp', manifest); };
-  const allowed = id => !stopped && (leases.get(id)?.until || 0) > Date.now();
+  const allowed = id => !stopped && runLeaseValid(leases.get(id));
   const record = (event, fields = {}) => { try { log({ app: 'donebot-cloud-worker', event, node_id: nodeId, ...fields }); } catch { /* Diagnostics cannot interrupt lease fencing. */ } };
   function serial(id, task) { const next = (tasks.get(id) || Promise.resolve()).catch(() => {}).then(task); tasks.set(id, next); next.finally(() => { if (tasks.get(id) === next) tasks.delete(id); }).catch(() => {}); return next; }
   const execute = async (id, action) => {
-    const value = action === 'start' || action === 'lease' ? { authorized_until: leases.get(id)?.until } : {};
+    const lease = leases.get(id);
+    const value = action === 'start' || action === 'lease' ? { authorized_until: lease && runLeaseUntil(lease) } : {};
     if (action === 'start' && runtimeCredentials) value.gateway = await call('runtime-credential', { instance_id: instanceID(id) });
     if (action === 'start') needsStop.add(id);
     const result = await socketJSON(agentSocket, `/v1/instances/${instanceID(id)}/${action}`, 'POST', value);
@@ -119,21 +121,21 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
           if (e.status === 409) current = null; else throw e;
         }
       }
-      const claimStarted = Date.now();
+      const claimStarted = Date.now(), monotonicStarted = performance.now();
       const response = await call('claim', { running: current ? [{ operation_id: current.op.id, lease_token: current.op.lease_token }] : [] });
       if (stopped) return;
-      const serverTime = Date.parse(response.server_time); if (!Number.isFinite(serverTime) || !Array.isArray(response.leases)) throw new Fault(502, 'invalid_master_lease');
+      const renewed = readRunLeases(response, claimStarted, monotonicStarted);
       lastMasterContact = Date.now();
       leases.clear();
-      for (const lease of response.leases) {
-        const until = Math.min(20000, Date.parse(lease.authorized_until) - serverTime) + claimStarted;
-        if (Number.isFinite(until) && until > Date.now()) leases.set(instanceID(lease.instance_id), { until, generation: lease.generation });
-      }
+      for (const [id, lease] of renewed) if (runLeaseValid(lease)) leases.set(id, lease);
       await Promise.all([...owned].filter(allowed).map(async id => { const observed = await execute(id, 'lease'); if (observed.state !== 'running') started.delete(id); }));
       for (const id of owned) if (allowed(id) && !started.has(id) && !tasks.has(id) && current?.op.instance_id !== id && response.command?.instance_id !== id && !(retries.get(id)?.generation === leases.get(id)?.generation && retries.get(id).until > Date.now())) {
         serial(id, () => start(id)).catch(() => {});
       }
       if (!current && response.command) void command(response.command).catch(() => {});
+    } catch (error) {
+      if (error.status === 401 || error.status === 403) { leases.clear(); lastMasterContact = 0; }
+      throw error;
     } finally { polling = false; }
   }
   const fence = setInterval(() => {

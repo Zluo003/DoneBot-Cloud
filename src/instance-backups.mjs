@@ -25,7 +25,7 @@ export class InstanceBackups {
     if (row?.state === 'ready') return this.get(id, row.id);
     if (!row) {
       if (this.list(id).length >= (automatic ? 4 : 3)) throw new Fault(409, 'backup_limit_reached');
-      row = { id: randomUUID(), bytes: this.main.disks.bytes + this.desktop.disks.bytes };
+      row = { id: randomUUID(), bytes: this.main.disks.bytesFor(id) + this.desktop.disks.bytesFor(id) };
       this.store.run("INSERT INTO instance_backups VALUES(?,?,?,'writing',?,?,NULL,NULL,?)", row.id, id, key, new Date().toISOString(), row.bytes, automatic ? 'automatic' : 'manual');
     }
     try {

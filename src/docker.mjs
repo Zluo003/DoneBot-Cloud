@@ -10,6 +10,7 @@ import { BoundedDisks } from './storage.mjs';
 import { Backups } from './backups.mjs';
 import { CloudDesktops } from './desktops.mjs';
 import { InstanceBackups } from './instance-backups.mjs';
+import { cloudStorageLimits, CLOUD_STORAGE_MAX_BYTES } from './resource-limits.mjs';
 
 const execute = promisify(execFile);
 // Executed only by the host agent, with no user-supplied command or arguments.
@@ -24,6 +25,7 @@ export class DockerRuntime {
     if (!image || /\s|[\x00-\x1f]/.test(image)) throw new Error('invalid image');
     if (!['none', 'public-web'].includes(egress)) throw new Error('invalid egress mode');
     if (egress !== 'none' && (process.platform !== 'linux' || process.getuid() !== 0 || !/^unix:\/\/\//.test(process.env.DOCKER_HOST || 'unix:///var/run/docker.sock'))) throw new Error('public-web egress requires root and a local Linux Docker engine');
+    const limits = cloudStorageLimits(storageBytes, desktopBytes);
     this.stateDir = privateDir(stateDir); this.image = image; this.binary = binary; this.healthTimeoutMs = healthTimeoutMs;
     this.gatewayRequired = gatewayRequired;
     const path = join(stateDir, 'deployment-id');
@@ -35,9 +37,9 @@ export class DockerRuntime {
     this.egress = egress === 'none' ? null : new Egress({ namespace: this.namespace, store: this.store, dns: egressDNS, denyIPv4: egressDenyIPv4, gatewayIPv4, binary: nftBinary });
     if (!['volume', 'bounded-ext4'].includes(storage)) throw new Error('invalid storage mode');
     if (storage === 'bounded-ext4' && !/^unix:\/\/\//.test(process.env.DOCKER_HOST || 'unix:///var/run/docker.sock')) throw new Error('bounded storage requires local Docker');
-    this.disks = storage === 'bounded-ext4' ? new BoundedDisks({ stateDir: this.stateDir, store: this.store, bytes: storageBytes }) : null;
+    this.disks = storage === 'bounded-ext4' ? new BoundedDisks({ stateDir: this.stateDir, store: this.store, bytes: limits.runtime }) : null;
     this.backups = this.disks ? new Backups({ stateDir: this.stateDir, store: this.store, disks: this.disks }) : null;
-    this.desktops = desktopImage ? new CloudDesktops(this, { image: desktopImage, bytes: desktopBytes, idleMs: desktopIdleMs, egressDNS, egressDenyIPv4, nftBinary }) : null;
+    this.desktops = desktopImage ? new CloudDesktops(this, { image: desktopImage, bytes: limits.desktop, idleMs: desktopIdleMs, egressDNS, egressDenyIPv4, nftBinary }) : null;
     if (this.desktops && !this.backups) throw new Error('Cloud desktops require bounded-ext4 storage');
     if (this.desktops) this.backups = new InstanceBackups(this.backups, this.desktops, this.store);
   }
@@ -209,8 +211,12 @@ export class DockerRuntime {
     if (!container) throw new Fault(404, 'instance_not_found');
     this.checkContainer(container, id, names);
     const volume = await this.inspect('volume', names.volume); this.checkVolume(volume, id);
-    const result = { cpu_cores: 1, memory_bytes: 2147483648, pids: 256, storage: { enforced: !!this.disks, limit_bytes: this.disks?.bytes ?? null } };
-    if (this.desktops) result.desktop = this.desktops.resources(id);
+    const result = { cpu_cores: 1, memory_bytes: 2147483648, pids: 256, storage: { enforced: !!this.disks, limit_bytes: this.disks?.bytesFor(id) ?? null } };
+    if (this.desktops) {
+      result.desktop = this.desktops.resources(id);
+      result.total = { cpu_cores: result.cpu_cores + result.desktop.cpu_cores, memory_bytes: result.memory_bytes + result.desktop.memory_bytes,
+        storage: { enforced: !!this.disks, limit_bytes: result.storage.limit_bytes + result.desktop.storage.limit_bytes, maximum_bytes: CLOUD_STORAGE_MAX_BYTES } };
+    }
     if (this.disks && container.State.Running) {
       const stat = statfsSync(volume.Mountpoint);
       result.storage.available_bytes = stat.bavail * stat.bsize;

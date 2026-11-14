@@ -1,0 +1,95 @@
+{
+  "date": "2026-11-14",
+  "scope": "Replace Boat with DoneBot-owned graphical Cloud desktop; no team sync, task migration or execution handoff",
+  "restoredGitHubBaselines": {
+    "DoneBot": "822b27499cf6d6981ae05088172f4d55abb610f6",
+    "DoneBotCloud": "91645e32a57596f25e84bf8f367d1b02040a219d"
+  },
+  "productionChanged": false,
+  "standardLimits": {
+    "cpuCoresTotal": 2,
+    "memoryBytesTotal": 4294967296,
+    "persistentStorageMaxBytes": 16106127360,
+    "newRuntimeDiskBytes": 5368709120,
+    "newDesktopDiskBytes": 10737418240,
+    "existingSmallerDisksPreserved": true
+  },
+  "linuxEnvironment": {
+    "disposableVM": "Debian 13 ARM64",
+    "kernel": "6.12.115+deb13.1-cloud-arm64",
+    "node": "24.18.0",
+    "runtimeImageIsLocalFixtureOnly": true
+  },
+  "linuxResults": [
+    {
+      "result": "linux_desktop_fixture_passed",
+      "image": "sha256:f61e450b4e373d9770e48314c72e9bf0ed8947e120b7f6c4dfdc863b7844200e",
+      "desktopImage": "sha256:a04a5a76a75579784632ecf56d31b26174831ac5162f4ac5189911cf8ab0c77c",
+      "users": 2,
+      "actualDesktopContainers": true,
+      "nativeDoneBotStatus": true,
+      "nativeCUAFrame": true,
+      "originalMCPBridge": true,
+      "boundedFileDownload": true,
+      "executionUID1000": true,
+      "otherSocketAndVolumeDenied": true,
+      "crossDesktopNetworkDenied": true,
+      "stopStartPersistence": true,
+      "rawViewerWebSocket": true,
+      "viewerExcludesDesktopExec": true,
+      "persistedDiskQuotaAndRestoreAfterDefaultIncrease": true,
+      "nativeViewerWebSocket": true,
+      "runtimeLeaseExpiryStopsAndDisconnectsDesktop": true,
+      "subscriptionStopDisconnectsViewer": true,
+      "stoppedRuntimeRefusesDesktopAccess": true,
+      "combinedEncryptedBackups": true,
+      "corruptionRejectsBeforeEitherOverwrite": true,
+      "idempotentTwoDiskRestore": true,
+      "interruptedTwoDiskRestoreRecovered": true,
+      "explicitDesktopUpgradeRetainsHome": true,
+      "idleStop": true,
+      "purgeRemovesDesktopData": true
+    },
+    {
+      "result": "bounded_storage_fixture_passed",
+      "platform": "linux",
+      "arch": "arm64",
+      "kernel": "6.12.115+deb13.1-cloud-arm64",
+      "image": "sha256:f61e450b4e373d9770e48314c72e9bf0ed8947e120b7f6c4dfdc863b7844200e",
+      "users": 2,
+      "bytesPerFilesystem": 134217728,
+      "fixedCapacityFilesystem": true,
+      "realENOSPC": true,
+      "otherUserUnaffected": true,
+      "persistenceAndSpaceRecovery": true,
+      "interruptedFormatRecovery": true,
+      "scopedFilesystemDeletion": true,
+      "actualLinuxContainers": true
+    },
+    {
+      "result": "systemd_fixture_passed",
+      "actualLinuxContainers": true,
+      "exclusiveHostLock": true,
+      "lockReleasedAfterExit": true,
+      "systemdAgentStarted": true,
+      "hostMountVisibleToDocker": true,
+      "readiness": true,
+      "killedAgentFencedByExecStopPost": true,
+      "stoppedDataRetained": true
+    }
+  ],
+  "otherChecks": {
+    "doneBotTests": 59,
+    "cloudTests": 28,
+    "typecheck": true,
+    "lint": true,
+    "serverBundle": true,
+    "rendererBuild": true,
+    "twoRuntimeSyntheticDesktopFixture": true
+  },
+  "limitations": [
+    "LLM and the two-runtime client's desktop were synthetic; real Linux CUA, MCP, viewer and file paths were verified separately.",
+    "Disk exhaustion used small bounded filesystems; the standard 5 + 10 GiB allocation and combined ceiling were validated in configuration tests.",
+    "This run does not establish production capacity or real model performance. No registry image publication, production deployment or DMG build was performed."
+  ]
+}

@@ -31,10 +31,10 @@ export class Backups {
     instanceID(requestKey); this.disks.check(id);
     let row = this.store.get('SELECT * FROM backups WHERE instance=? AND request_key=?', id, requestKey);
     if (row?.state === 'ready') return this.get(id, row.id);
-    this.capacity();
+    this.capacity(id);
     if (!row) {
       if (this.list(id).length >= (automatic ? 4 : 3)) throw new Fault(409, 'backup_limit_reached');
-      row = { id: randomUUID(), bytes: this.disks.bytes };
+      row = { id: randomUUID(), bytes: this.disks.bytesFor(id) };
       this.store.run('INSERT INTO backups(id,instance,request_key,state,created_at,bytes,origin) VALUES(?,?,?,?,?,?,?)', row.id, id, requestKey, 'writing', new Date().toISOString(), row.bytes, automatic ? 'automatic' : 'manual');
     }
     await this.disks.unmount(id);
@@ -68,9 +68,9 @@ export class Backups {
     if (previous && previous.snapshot !== snapshot) throw new Fault(409, 'idempotency_conflict');
     if (previous?.state === 'ready') return;
     if (previous?.state === 'committing') { this.finishRestore(id, requestKey); return; }
-    this.capacity();
+    this.capacity(id);
     const row = this.get(id, snapshot); this.disks.check(id);
-    if (row.bytes !== this.disks.bytes) throw new Fault(409, 'backup_size_mismatch');
+    if (row.bytes !== this.disks.bytesFor(id)) throw new Fault(409, 'backup_size_mismatch');
     await this.disks.unmount(id);
     const path = this.path(snapshot), fd = openSync(path, 'r'), nonce = Buffer.alloc(12), tag = Buffer.alloc(16);
     try { readSync(fd, nonce, 0, 12, 0); readSync(fd, tag, 0, 16, row.size - 16); } finally { closeSync(fd); }
@@ -97,7 +97,7 @@ export class Backups {
     const temporary = this.disks.path(id) + '.restore-' + instanceID(requestKey);
     if (existsSync(temporary)) {
       const stat = lstatSync(temporary);
-      if (!stat.isFile() || stat.uid !== process.getuid() || stat.nlink !== 1 || stat.size !== this.disks.bytes) throw new Fault(409, 'restore_ownership_mismatch');
+      if (!stat.isFile() || stat.uid !== process.getuid() || stat.nlink !== 1 || stat.size !== this.disks.bytesFor(id)) throw new Fault(409, 'restore_ownership_mismatch');
       renameSync(temporary, this.disks.path(id)); flush(this.disks.dir);
     }
     this.store.run("UPDATE backup_restores SET state='ready' WHERE instance=? AND request_key=?", id, requestKey);
@@ -117,9 +117,9 @@ export class Backups {
     for (const row of this.list(id).slice(3)) this.remove(id, row.id);
     return result;
   }
-  capacity() {
+  capacity(id) {
     const free = statfsSync(this.dir);
-    if (free.bavail * free.bsize < this.disks.bytes + 512 * 1024 ** 2) throw new Fault(503, 'host_storage_insufficient');
+    if (free.bavail * free.bsize < this.disks.bytesFor(id) + 512 * 1024 ** 2) throw new Fault(503, 'host_storage_insufficient');
   }
   remove(id, snapshot) {
     const row = this.store.get('SELECT id FROM backups WHERE instance=? AND id=?', instanceID(id), instanceID(snapshot));

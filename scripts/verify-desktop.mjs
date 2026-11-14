@@ -86,9 +86,11 @@ try {
   assert.equal((await desk(b, '/exec', { command: 'cat marker.txt' })).stdout, 'user1');
   const ws = new WebSocket(`ws+unix://${join(runtime.names(a).edge, 'cloud-desktop.sock')}:/websockify`); clients.push(ws);
   const rfb = once(ws, 'message'); await once(ws, 'open'); assert.match((await rfb)[0].toString(), /RFB 003/);
+  await assert.rejects(desk(a, '/exec', { command: 'printf blocked' }), { status: 409 });
+  const directClosed = once(ws, 'close'); ws.close(1000); await directClosed;
   const nativeWS = new WebSocket(`ws+unix://${socket}:/v1/instances/${a}/proxy/api/desktop-viewer/local/shared/websockify`, { headers: { 'x-cloud-origin': 'https://donebot.cn', origin: 'https://donebot.cn' } }); clients.push(nativeWS);
   const nativeRfb = once(nativeWS, 'message'); await once(nativeWS, 'open'); assert.match((await nativeRfb)[0].toString(), /RFB 003/);
-  const disconnected = once(ws, 'close'), nativeDisconnected = once(nativeWS, 'close'); await socketJSON(socket, `/v1/instances/${a}/stop`, 'POST', {}); await Promise.all([disconnected, nativeDisconnected]);
+  const nativeDisconnected = once(nativeWS, 'close'); await socketJSON(socket, `/v1/instances/${a}/stop`, 'POST', {}); await nativeDisconnected;
   assert.equal((await desk(b, '/exec', { command: 'cat marker.txt' })).stdout, 'user1');
   await assert.rejects(desk(a, '/exec', { command: 'id' }), { status: 403 });
   await socketJSON(socket, `/v1/instances/${a}/start`, 'POST', { authorized_until: Date.now() + 20000 }); await desk(a, '/action', { action: 'start' });
@@ -99,6 +101,9 @@ try {
   await desk(a, '/action', { action: 'start' });
   await desk(a, '/exec', { command: 'printf after > marker.txt' });
   await inside(a, "import{writeFileSync}from'node:fs';writeFileSync('/data/main-marker','after');");
+  assert.equal(snapshot.bytes, config.storageBytes + config.desktopBytes);
+  runtime.disks.bytes += 128 * 1024 ** 2; runtime.desktops.disks.bytes += 128 * 1024 ** 2;
+  assert.equal((await runtime.resources(a)).total.storage.limit_bytes, config.storageBytes + config.desktopBytes);
   const group = runtime.backups.get(a, snapshot.id), childPath = runtime.desktops.backups.path(group.desktop), encrypted = readFileSync(childPath);
   const corrupt = Buffer.from(encrypted); corrupt[15] ^= 1; writeFileSync(childPath, corrupt);
   await assert.rejects(proxy(a, `/api/cloud/backups/${snapshot.id}/restore`, { request_key: randomUUID(), confirm: true }));
@@ -148,7 +153,7 @@ try {
   await socketJSON(socket, `/v1/instances/${a}/purge`, 'POST', {});
   assert.equal(await runtime.inspect('container', runtime.desktops.names(a).container), null);
   assert.equal(await runtime.inspect('volume', runtime.desktops.names(a).volume), null);
-  console.log(JSON.stringify({ result: 'linux_desktop_fixture_passed', image: runtime.image, desktopImage: runtime.desktops.image, users: 2, actualDesktopContainers: true, nativeDoneBotStatus: true, nativeCUAFrame: true, originalMCPBridge: true, boundedFileDownload: true, executionUID1000: true, otherSocketAndVolumeDenied: true, crossDesktopNetworkDenied: true, stopStartPersistence: true, rawViewerWebSocket: true, nativeViewerWebSocket: true, runtimeLeaseExpiryStopsAndDisconnectsDesktop: true, subscriptionStopDisconnectsViewer: true, stoppedRuntimeRefusesDesktopAccess: true, combinedEncryptedBackups: true, corruptionRejectsBeforeEitherOverwrite: true, idempotentTwoDiskRestore: true, interruptedTwoDiskRestoreRecovered: true, explicitDesktopUpgradeRetainsHome: true, idleStop: true, purgeRemovesDesktopData: true }));
+  console.log(JSON.stringify({ result: 'linux_desktop_fixture_passed', image: runtime.image, desktopImage: runtime.desktops.image, users: 2, actualDesktopContainers: true, nativeDoneBotStatus: true, nativeCUAFrame: true, originalMCPBridge: true, boundedFileDownload: true, executionUID1000: true, otherSocketAndVolumeDenied: true, crossDesktopNetworkDenied: true, stopStartPersistence: true, rawViewerWebSocket: true, viewerExcludesDesktopExec: true, persistedDiskQuotaAndRestoreAfterDefaultIncrease: true, nativeViewerWebSocket: true, runtimeLeaseExpiryStopsAndDisconnectsDesktop: true, subscriptionStopDisconnectsViewer: true, stoppedRuntimeRefusesDesktopAccess: true, combinedEncryptedBackups: true, corruptionRejectsBeforeEitherOverwrite: true, idempotentTwoDiskRestore: true, interruptedTwoDiskRestoreRecovered: true, explicitDesktopUpgradeRetainsHome: true, idleStop: true, purgeRemovesDesktopData: true }));
 } catch (error) {
   console.error(JSON.stringify({ event: 'desktop_fixture_failed', phase, code: error.code || 'unknown', name: error.name, frames: error.stack?.split('\n').filter(line => /^\s+at /.test(line)) }));
   for (const id of ids) {

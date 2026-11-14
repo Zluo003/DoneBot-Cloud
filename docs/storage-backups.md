@@ -1,10 +1,10 @@
 # 存储、备份与恢复
 
-生产 agent 使用 `bounded-ext4`：运行盘及已配置的桌面资料盘各使用一个 root 私有、预分配的 ext4 镜像，经 loop 挂载后绑定到专属 Docker 卷。两盘默认各 5 GiB，可用空间扣除文件系统开销；`CLOUD_STORAGE_BYTES` 支持 128 MiB–1 TiB 的整数 MiB。桌面盘使用 `CLOUD_DESKTOP_STORAGE_BYTES` 的相同范围。固定 inode 数量各 65536。硬配额覆盖 `/data` 内的聊天、文件、模型 CLI 状态及浏览器资料；`/tmp`、`/run` 另有内存 tmpfs 限额。
+生产 agent 使用 `bounded-ext4`：运行盘及已配置的桌面资料盘各使用一个 root 私有、预分配的 ext4 镜像，经 loop 挂载后绑定到专属 Docker 卷。新实例运行盘默认 5 GiB、桌面资料盘默认 10 GiB，持久存储总上限 15 GiB，可用空间扣除文件系统开销。`CLOUD_STORAGE_BYTES` 与 `CLOUD_DESKTOP_STORAGE_BYTES` 均支持至少 128 MiB 的整数 MiB，两项配置总和超过 15 GiB 时拒绝启动。固定 inode 数量各 65536。硬配额覆盖 `/data` 内的聊天、文件、模型 CLI 状态及浏览器资料；`/tmp`、`/run` 另有内存 tmpfs 限额。
 
 文件系统挂载使用 nodev/nosuid，校验 loop backing file、镜像属主/大小及卷配置。Docker local driver 不直接处理 `o=loop`。root agent 的挂载必须对宿主 Docker daemon 可见，因此 systemd agent 不使用独立 mount namespace。worker 仍使用服务沙箱，用户容器没有 mount 权限或 Docker socket。
 
-已存在的普通 Docker 卷不会自动迁移为镜像，也不支持直接修改既有磁盘容量。全节点配置应保持一致；修改后旧卷会拒绝启动，不能据此重建或格式化用户数据。
+已存在的普通 Docker 卷不会自动迁移为镜像。已登记的较小镜像盘继续使用持久记录的容量；提高新建默认值不会调整旧盘或备份大小，备份与恢复均使用实际容量。降低配置到小于旧盘容量时拒绝启动，不重建或格式化数据。既有磁盘的大小、属主、链接和 loop backing file 校验仍然保留。
 
 ## 用户操作
 
@@ -12,7 +12,7 @@
 
 | 路径（实例代理内） | 行为 |
 | --- | --- |
-| `GET /api/cloud/resources` | CPU/内存/PID 配置、磁盘容量/可用空间/inode、自动备份间隔 |
+| `GET /api/cloud/resources` | 运行服务及桌面的 CPU/内存/PID、实际磁盘容量/可用空间/inode、合计资源与 15 GiB 上限、自动备份间隔 |
 | `GET /api/cloud/backups` | 本实例备份列表和状态 |
 | `POST /api/cloud/backups` | `{confirm:true,request_key:UUID}` 创建幂等备份 |
 | `POST /api/cloud/backups/:id/restore` | 同样的确认和新幂等键，覆盖恢复 |

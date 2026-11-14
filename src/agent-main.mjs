@@ -3,9 +3,11 @@ import { createAgent } from './agent.mjs';
 import { DockerRuntime } from './docker.mjs';
 import { privateDir } from './common.mjs';
 import { hostLock } from './host-lock.mjs';
+import { requireDesktopImage } from './resource-limits.mjs';
 
 const stateDir = privateDir(resolve(process.env.CLOUD_AGENT_STATE_DIR || '.local/agent'));
 const development = process.env.CLOUD_MODE === 'development';
+requireDesktopImage(process.env.CLOUD_DESKTOP_IMAGE, development);
 const unlock = development ? () => {} : hostLock(stateDir);
 const app = await createAgent({ socketPath: resolve(process.env.CLOUD_AGENT_SOCKET || `${stateDir}/agent.sock`), publicOrigin: process.env.CLOUD_PUBLIC_ORIGIN, development,
   backupIntervalMs: Number(process.env.CLOUD_BACKUP_INTERVAL_HOURS || '0') * 3600000,

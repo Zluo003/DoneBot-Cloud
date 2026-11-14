@@ -6,9 +6,11 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { BoundedDisks } from './storage.mjs';
 import { Backups } from './backups.mjs';
+import { DESKTOP_STORAGE_BYTES } from './resource-limits.mjs';
 import { Egress } from './egress.mjs';
 import { Store } from './store.mjs';
 import { Fault, body, close, fail, instanceID, json, listen, privateDir } from './common.mjs';
+import { DesktopControl, desktopController, trackDesktopMcp } from './desktop-control.mjs';
 
 const execute = promisify(execFile), CUA = '/usr/local/libexec/donebot/cua-driver', CUA_SOCKET = '/run/user/1000/donebot-cua.sock';
 const readFile = `import os,sys,stat,struct
@@ -52,12 +54,13 @@ while True:
  client,_=listener.accept();threading.Thread(target=relay,args=(client,),daemon=True).start()`;
 
 export class CloudDesktops {
-  constructor(host, { image, bytes, idleMs = 30 * 60000, egressDNS, egressDenyIPv4, nftBinary }) {
+  constructor(host, { image, bytes = DESKTOP_STORAGE_BYTES, idleMs = 30 * 60000, egressDNS, egressDenyIPv4, nftBinary }) {
     if (!/^(?:[a-zA-Z0-9./:_-]+@)?sha256:[a-f0-9]{64}$/.test(image || '')) throw new Error('desktop requires immutable reviewed image');
     if (!Number.isSafeInteger(idleMs) || idleMs < 1000 || idleMs > 86400000) throw new Error('invalid desktop idle timeout');
     this.host = host; this.image = image; this.idleMs = idleMs;
     this.dir = privateDir(join(host.stateDir, 'desktops')); this.store = new Store(join(this.dir, 'metadata'));
     this.store.db.exec('CREATE TABLE IF NOT EXISTS desktops(id TEXT PRIMARY KEY,password TEXT NOT NULL)');
+    this.control = new DesktopControl(this.store);
     this.disks = new BoundedDisks({ stateDir: this.dir, store: this.store, bytes, owner: 1000 });
     this.backups = new Backups({ stateDir: this.dir, store: this.store, disks: this.disks });
     this.egress = host.egress ? new Egress({ namespace: host.namespace, store: this.store, dns: egressDNS, denyIPv4: egressDenyIPv4, binary: nftBinary }) : null;
@@ -187,8 +190,11 @@ export class CloudDesktops {
   }
   async frame(id) {
     const n = this.names(id), value = await this.host.inspect('container', n.container); if (!value?.State.Running) throw new Fault(409, 'desktop_not_running'); this.check(value, id);
-    await this.host.docker(['container', 'exec', '-u', '1000:1000', n.container, CUA, 'call', 'get_desktop_state', '{}', '--socket', CUA_SOCKET, '--screenshot-out-file', '/tmp/dbc-frame.png']);
-    return { png: (await this.host.docker(['container', 'exec', '-u', '1000:1000', n.container, 'base64', '-w0', '/tmp/dbc-frame.png'])).trim(), format: 'png' };
+    const path = '/tmp/dbc-frame-' + randomBytes(16).toString('hex') + '.png';
+    try {
+      await this.host.docker(['container', 'exec', '-u', '1000:1000', n.container, CUA, 'call', 'get_desktop_state', '{}', '--socket', CUA_SOCKET, '--screenshot-out-file', path]);
+      return { png: (await this.host.docker(['container', 'exec', '-u', '1000:1000', n.container, 'base64', '-w0', path])).trim(), format: 'png' };
+    } finally { await this.host.docker(['container', 'exec', '-u', '1000:1000', n.container, 'rm', '-f', path]).catch(() => {}); }
   }
   async file(id, input, res) {
     if (typeof input.path !== 'string' || input.path.length > 8192 || !input.path.startsWith('/home/cua/workspace/') || input.path.includes('\0')) throw new Fault(400, 'invalid_desktop_file');
@@ -229,17 +235,27 @@ export class CloudDesktops {
     const server = createServer(async (req, res) => {
       try {
         this.authorize(id);
-        if (req.method === 'GET' && req.url === '/status') return json(res, 200, await this.hold(id, () => this.status(id), false));
+        if (req.method === 'GET' && req.url === '/status') return json(res, 200, { ...await this.hold(id, () => this.status(id), false), control: this.control.status(id) });
         if (req.method === 'POST' && req.url === '/action') {
           const input = await body(req); if (Object.keys(input).join(',') !== 'action' || !['pull', 'run', 'start', 'stop', 'remove'].includes(input.action)) throw new Fault(400, 'invalid_desktop_action');
           await this.serial(id, async () => {
             this.authorize(id);
             if (input.action === 'pull') { if (!await this.imageReady()) throw new Fault(503, 'desktop_image_unavailable'); }
-            else if (['run', 'start'].includes(input.action)) { try { await this.hold(id, () => this.start(id)); this.authorize(id); } catch (e) { await this.stop(id); throw e; } }
-            else await this.removeOrStop(id, input.action);
+            else if (['run', 'start'].includes(input.action)) {
+              const lease = this.control.enter(id, desktopController(req));
+              try { await this.hold(id, () => this.start(id)); this.authorize(id); }
+              catch (e) { await this.stop(id); throw e; }
+              finally { lease.release(); }
+            }
+            else await this.control.stopAndReset(id, () => this.removeOrStop(id, input.action));
           }); return json(res, 200, { ok: true });
         }
-        if (req.method === 'POST' && req.url === '/exec') { const input = await body(req, 24000); return json(res, 200, await this.hold(id, () => this.exec(id, input))); }
+        if (req.method === 'POST' && req.url === '/exec') {
+          const input = await body(req, 24000), lease = this.control.enter(id, desktopController(req)), key = randomBytes(16).toString('hex');
+          try { lease.begin(key); const result = await this.hold(id, () => this.exec(id, input)); lease.finish(key); return json(res, 200, result); }
+          catch (error) { lease.interrupt(); throw error; }
+          finally { lease.release(); }
+        }
         if (req.method === 'GET' && req.url === '/frame') return json(res, 200, await this.hold(id, () => this.frame(id)));
         if (req.method === 'POST' && req.url === '/file') { const input = await body(req); await this.hold(id, () => this.file(id, input, res)); return; }
         throw new Fault(404, 'not_found');
@@ -248,18 +264,27 @@ export class CloudDesktops {
     const sockets = new Set(); server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
     server.on('upgrade', async (req, socket, head) => {
       socket.on('error', () => socket.destroy());
+      socket.once('end', () => socket.destroy());
       try {
         this.authorize(id);
         if (req.url === '/mcp' && req.headers.upgrade === 'donebot-mcp') {
+          const lease = this.control.enter(id, desktopController(req));
+          socket.once('close', lease.release);
           const n = this.names(id), value = await this.host.inspect('container', n.container); if (!value?.State.Running) throw new Fault(409, 'desktop_not_running'); this.check(value, id); this.authorize(id);
           const release = this.claim(id);
           const child = spawn(this.host.binary, ['container', 'exec', '-i', '-u', '1000:1000', '-e', 'HOME=/home/cua', '-e', 'DISPLAY=:1', n.container, CUA, 'mcp', '--socket', CUA_SOCKET], { stdio: ['pipe', 'pipe', 'ignore'] });
           const item = { id, kill: () => { child.kill(); socket.destroy(); } }; this.streams.add(item); this.touch(id);
           socket.once('close', () => { child.kill(); this.streams.delete(item); release(); this.touch(id); }); child.once('error', () => socket.destroy()); child.once('exit', () => socket.destroy()); child.stdin.on('error', () => socket.destroy());
           socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: donebot-mcp\r\n\r\n');
-          if (head.length) child.stdin.write(head); socket.pipe(child.stdin); child.stdout.pipe(socket); return;
+          const tracker = trackDesktopMcp(lease, data => { if (!child.stdin.write(data)) socket.pause(); });
+          child.stdin.on('drain', () => socket.resume());
+          const input = data => { try { tracker.input(data); } catch { item.kill(); } };
+          if (head.length) input(head); socket.on('data', input);
+          child.stdout.on('data', data => { try { tracker.output(data); if (!socket.write(data)) child.stdout.pause(); } catch { item.kill(); } });
+          socket.on('drain', () => child.stdout.resume()); socket.once('close', () => tracker.close()); return;
         }
         if (req.url !== '/websockify' || req.headers.upgrade?.toLowerCase() !== 'websocket') throw new Fault(404, 'not_found');
+        const lease = this.control.enter(id, 'viewer-' + randomBytes(16).toString('hex')); socket.once('close', lease.release);
         const pinned = this.pinViewer(id);
         let release; try { release = this.claim(id); } catch (e) { pinned.release(); throw e; }
         socket.once('close', () => { release(); this.touch(id); });
@@ -285,7 +310,7 @@ export class CloudDesktops {
   async drain(id) { await this.queues.get(id)?.catch(() => {}); }
   resources(id) {
     const stat = this.disks.mounted(id) ? statfsSync(this.disks.mountPath(id)) : null;
-    return { enabled: true, cpu_cores: 1, memory_bytes: 2147483648, storage: { enforced: true, limit_bytes: this.disks.bytes, ...(stat ? { available_bytes: stat.bavail * stat.bsize, total_bytes: stat.blocks * stat.bsize } : {}) }, idle_timeout_seconds: this.idleMs / 1000 };
+    return { enabled: true, cpu_cores: 1, memory_bytes: 2147483648, storage: { enforced: true, limit_bytes: this.disks.bytesFor(id), ...(stat ? { available_bytes: stat.bavail * stat.bsize, total_bytes: stat.blocks * stat.bsize } : {}) }, idle_timeout_seconds: this.idleMs / 1000 };
   }
   async close() { clearInterval(this.timer); for (const item of this.streams) item.kill(); for (const { server, sockets, path } of this.servers.values()) { for (const socket of sockets) socket.destroy(); await close(server); rmSync(path, { force: true }); } await Promise.allSettled(this.queues.values()); this.store.close(); }
 }

@@ -159,7 +159,7 @@ node scripts/desktop-dockerfile.mjs /path/to/DoneBot "$desktop_build_dir/Dockerf
 docker build -t your-registry/donebot-desktop:reviewed "$desktop_build_dir"
 ```
 
-发布并核对桌面镜像摘要后，配置 `CLOUD_DESKTOP_IMAGE=repository@sha256:实际摘要`。当前适配要求 DoneBot 原版桌面 labels 对应 CUA 0.37.0、image-layer 8 及固定基础摘要。节点不会根据用户输入拉取镜像；部署前由管理员加载或拉取已审核镜像。配置后 readiness 同时检查桌面镜像。本地 image ID 与注册表摘要用途不同，不得混用。
+发布并核对桌面镜像摘要后，配置 `CLOUD_DESKTOP_IMAGE=repository@sha256:实际摘要`。当前适配要求 DoneBot 原版桌面 labels 对应 CUA 0.37.0、image-layer 8 及固定基础摘要。节点不会根据用户输入拉取镜像；部署前由管理员加载或拉取已审核镜像。生产 agent 必须配置桌面镜像，readiness 同时检查桌面镜像。本地 image ID 与注册表摘要用途不同，不得混用。
 
 agent 环境文件 `/etc/donebot-cloud/agent.env`（root 可读）：
 
@@ -173,7 +173,7 @@ CLOUD_NFT_BINARY=/usr/sbin/nft
 CLOUD_EGRESS_DNS=1.1.1.1,9.9.9.9
 CLOUD_STORAGE_BYTES=5368709120
 CLOUD_BACKUP_INTERVAL_HOURS=0
-CLOUD_DESKTOP_STORAGE_BYTES=5368709120
+CLOUD_DESKTOP_STORAGE_BYTES=10737418240
 CLOUD_DESKTOP_IDLE_MINUTES=30
 ```
 
@@ -181,7 +181,7 @@ CLOUD_DESKTOP_IDLE_MINUTES=30
 
 `public-web` 只支持本机 Linux Docker；防火墙不能加载则拒绝启动。省略该变量时保持 `network=none`，用于完全禁网的验证或部署。管理员可用 `CLOUD_EGRESS_DENY_IPV4` 填逗号分隔的额外 IPv4/CIDR，阻断其他基础设施公网地址；DNS 也必须是未被阻断的公网 IPv4。既有资源的网络模式和 DNS 配置不可直接切换；下述升级命令只处理镜像变更，不负责网络配置迁移。
 
-生产强制独立 ext4 容量，普通旧卷不自动迁移，详情见 [存储与备份](storage-backups.md)。默认运行盘和桌面资料盘各 5 GiB，不要直接修改既有磁盘大小。桌面启用后保持节点配置一致，不能通过删除桌面配置接管既有资源。每个活跃账户的服务加桌面总限制为 2 CPU、4 GiB 内存；桌面按需启动。capacity 应按这个组合和磁盘/网络数量规划，不能只按服务容器计算。自动备份默认禁用；启用前规划磁盘容量和短暂停机窗口。备份最多保留 3 份，轮换也会删除较旧手动备份，本地备份不属于异地灾备。保全完整 agent 状态及密钥才能恢复。
+生产强制独立 ext4 容量，普通旧卷不自动迁移，详情见 [存储与备份](storage-backups.md)。新实例默认运行盘 5 GiB、桌面资料盘 10 GiB，两项配置总和硬性不得超过每用户 15 GiB。已有较小磁盘继续使用持久记录的实际容量，增加默认值不会扩容、重建或格式化旧盘；降低配置小于旧盘大小则拒绝启动，不删除数据。桌面启用后保持节点配置一致，不能通过删除桌面配置接管既有资源。每个活跃账户的服务加桌面总限制为 2 CPU、4 GiB 内存；桌面按需启动。capacity 应按这个组合和磁盘/网络数量规划，不能只按服务容器计算。自动备份默认禁用；启用前规划磁盘容量和短暂停机窗口。备份最多保留 3 份，轮换也会删除较旧手动备份，本地备份不属于异地灾备。保全完整 agent 状态及密钥才能恢复。
 
 root agent 的挂载必须与 Docker daemon 位于同一宿主 mount namespace；模板显式 `PrivateMounts=false`，不加 `ProtectSystem`、`ProtectHome`、`PrivateTmp` 等会隐式建立 mount namespace 的选项。root agent 是受信宿主执行边界。`agent.lock` 使用内核 flock，使 agent 和维护命令互斥；停止后才释放锁。
 

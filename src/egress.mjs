@@ -94,7 +94,20 @@ export class Egress {
       try {
         const value = await execute(this.binary, ['-j', 'list', 'tables'], { timeout: 10000, maxBuffer: 1024 * 1024 });
         const table = JSON.parse(value.stdout).nftables.find(item => item.table?.family === 'inet' && item.table.name === this.table)?.table;
-        if (table && table.comment !== this.owner) throw new Error('firewall ownership mismatch');
+        if (table) {
+          let owner = table.comment;
+          if (owner === undefined) {
+            // nftables 1.0.6 omits table comments from JSON, including single-table output.
+            // Only accept the table-level comment immediately after the exact header.
+            const detail = await execute(this.binary, ['list', 'table', 'inet', this.table], { timeout: 10000, maxBuffer: 1024 * 1024 });
+            const lines = detail.stdout.trimStart().split(/\r?\n/);
+            if (lines[0].trim() !== `table inet ${this.table} {`) throw new Error('firewall table header mismatch');
+            const comment = lines.slice(1).find(line => line.trim().length)?.trim();
+            if (comment !== `comment "${this.owner}"`) throw new Error('firewall ownership mismatch');
+            owner = this.owner;
+          }
+          if (owner !== this.owner) throw new Error('firewall ownership mismatch');
+        }
         exists = !!table;
       } catch { throw new Fault(503, 'egress_firewall_failed'); }
       // A single nft transaction: no interval with missing rules during updates.

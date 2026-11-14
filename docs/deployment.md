@@ -95,27 +95,29 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 
 只允许手动触发，不随提交自动升级节点。成功后 Summary 和 artifact 中提供 `registry-images.env`、发布清单及 Linux/桌面验证结果；节点先拉取清单中的两个 `repository@sha256:…`，再将 env 的值合入 `agent.env`。升级已有实例仍需执行下述受控镜像升级，不能直接改配置启动旧容器。该流程不修改 DoneBot 仓库源码，不发布原版 `cloud-home`。
 
-运行这些 Actions 的仓库需有可用计算额度；公开仓库使用标准托管 runner 的构建计算免费，见 [GitHub 计费说明](https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions)。DoneBot 与本仓库现均已公开，Cloud 可见性变更已获用户明确授权。仓库与 GHCR 包可见性分别配置；公开镜像支持匿名拉取，私有镜像需要登录。2026-11-13 的 [run 43387570590](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43387570590) 已构建、验证并发布 amd64 双镜像，下列摘要对应其 artifact 发布清单。
+运行这些 Actions 的仓库需有可用计算额度；公开仓库使用标准托管 runner 的构建计算免费，见 [GitHub 计费说明](https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions)。DoneBot 与本仓库现均已公开，Cloud 可见性变更已获用户明确授权。仓库与 GHCR 包可见性分别配置；公开镜像支持匿名拉取，私有镜像需要登录。2026-11-13 的 [run 43387570590](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43387570590) 已构建、验证并发布首版 amd64 双镜像。
 
 #### 已发布的 amd64 镜像
 
-DoneBot 源码固定为 `e9d24ff50f10e5772409089386f202e2b1813447`，Cloud 验证代码为 `7107d2690353319ef446fb7e43aa4815d9462202`。以下两个镜像已完成真实双用户服务、出网隔离和专属桌面验证；注册表清单及镜像配置支持匿名读取，无需节点登录 GitHub。此次发布为 `linux/amd64`，不用于 arm64 节点。
+2026-11-14 的[发布流程](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43554033585)已成功发布本轮自有云桌面适配；[发布与注册表核验记录](verification/images-2026-11-14-amd64.json)保留源码、不可变摘要及真实 Linux 验证结果。此前 2026-11-13 的镜像配置保留供历史核对。
 
-将 [固定镜像配置](../deploy/images/2026-11-13-amd64.env) 中的两个值合入 `/etc/donebot-cloud/agent.env`：
+DoneBot 源码固定为 `9455c9fedac847753e6d680a4b3a789c5bebee22`，Cloud 验证代码为 `c645768a69d7139351945bbb77ee22511d1e5d1e`。以下两个镜像已完成真实双用户服务、出网隔离和专属桌面验证；注册表清单及镜像配置支持匿名读取，无需节点登录 GitHub。此次发布为 `linux/amd64`，不用于 arm64 节点。
+
+将 [固定镜像配置](../deploy/images/2026-11-14-amd64.env) 中的两个值合入 `/etc/donebot-cloud/agent.env`：
 
 ```dotenv
-CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:bff0b6888023791b3ceddb90a7601d50d5ec2f90f8f85a6f6ffa531ba770d5c0
-CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:0cb2a79746b823fadf077e86cf5ae7acc88c7935459f4a1736e8778951b7c1ad
+CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:dcdf3074795048f8ed5cd55928d7bff77499e49041aaa2673de292ee0f6492ac
+CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:13ffc989e7c2b9f46fb0be91107126238630dfe81287149fdada33b2c5fc5e5e
 ```
 
 在 amd64 节点上拉取，无需安装 DoneBot 源码或编译依赖：
 
 ```sh
-docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:bff0b6888023791b3ceddb90a7601d50d5ec2f90f8f85a6f6ffa531ba770d5c0
-docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:0cb2a79746b823fadf077e86cf5ae7acc88c7935459f4a1736e8778951b7c1ad
+docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:dcdf3074795048f8ed5cd55928d7bff77499e49041aaa2673de292ee0f6492ac
+docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:13ffc989e7c2b9f46fb0be91107126238630dfe81287149fdada33b2c5fc5e5e
 ```
 
-镜像发布不会自动更新节点。同步包含 Linux 兼容修复的 Cloud 代码；新节点使用上述摘要，已有实例按本文“节点镜像滚动升级”和“桌面镜像更新”分别准备，保留数据后再启动。原 `API_KEY_NOT_FOUND` 仍需发布、部署 donebot-api 的运行凭据修复，更新镜像不能替代主控修复。该流水线不验证生产账户扣费或生产节点。
+镜像发布不会自动更新节点。节点须同步至 Cloud 提交 `c645768a69d7139351945bbb77ee22511d1e5d1e` 或包含该提交的版本，资源合计限制为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。新节点使用上述摘要，已有实例按本文“节点镜像滚动升级”和“桌面镜像更新”分别准备，保留数据后再启动。原 `API_KEY_NOT_FOUND` 仍需发布、部署 donebot-api 的运行凭据修复，更新镜像不能替代主控修复。该流水线不验证生产账户扣费或生产节点。
 
 #### 自行构建与离线包
 

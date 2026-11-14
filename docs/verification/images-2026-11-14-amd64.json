@@ -1,0 +1,158 @@
+{
+  "date": "2026-11-14",
+  "workflow": "https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43554033585",
+  "conclusion": "success",
+  "artifact": "cloud-images-amd64-9455c9fedac847753e6d680a4b3a789c5bebee22",
+  "manifest": {
+    "source_revision": "9455c9fedac847753e6d680a4b3a789c5bebee22",
+    "platform": "linux/amd64",
+    "output": "/home/runner/work/_temp/donebot-images",
+    "docker_context": "current",
+    "archive": false,
+    "images": {
+      "service": {
+        "id": "sha256:3653d6b610757c512adff38d517cb2a342e2683cf559890e5c1578f2fb8cd482",
+        "platform": "linux/amd64",
+        "revision": "9455c9fedac847753e6d680a4b3a789c5bebee22"
+      },
+      "desktop": {
+        "id": "sha256:847f1b5cdf4ad1a75da324f1b0d778184784556383497452f562e1ee11de99a2",
+        "platform": "linux/amd64",
+        "revision": "9455c9fedac847753e6d680a4b3a789c5bebee22"
+      }
+    },
+    "cloud_revision": "c645768a69d7139351945bbb77ee22511d1e5d1e",
+    "registry": {
+      "service": "ghcr.io/zluo003/donebot-cloud-service@sha256:dcdf3074795048f8ed5cd55928d7bff77499e49041aaa2673de292ee0f6492ac",
+      "desktop": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:13ffc989e7c2b9f46fb0be91107126238630dfe81287149fdada33b2c5fc5e5e"
+    }
+  },
+  "registryVerification": [
+    {
+      "kind": "service",
+      "reference": "ghcr.io/zluo003/donebot-cloud-service@sha256:dcdf3074795048f8ed5cd55928d7bff77499e49041aaa2673de292ee0f6492ac",
+      "anonymousPullMetadata": true,
+      "registryDigestVerified": true,
+      "imageConfigDigest": "sha256:3653d6b610757c512adff38d517cb2a342e2683cf559890e5c1578f2fb8cd482",
+      "platform": "linux/amd64",
+      "sourceRevision": "9455c9fedac847753e6d680a4b3a789c5bebee22"
+    },
+    {
+      "kind": "desktop",
+      "reference": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:13ffc989e7c2b9f46fb0be91107126238630dfe81287149fdada33b2c5fc5e5e",
+      "anonymousPullMetadata": true,
+      "registryDigestVerified": true,
+      "imageConfigDigest": "sha256:847f1b5cdf4ad1a75da324f1b0d778184784556383497452f562e1ee11de99a2",
+      "platform": "linux/amd64",
+      "sourceRevision": "9455c9fedac847753e6d680a4b3a789c5bebee22"
+    }
+  ],
+  "linuxVerification": {
+    "desktop-verification": [
+      {
+        "result": "linux_desktop_fixture_passed",
+        "image": "sha256:3653d6b610757c512adff38d517cb2a342e2683cf559890e5c1578f2fb8cd482",
+        "desktopImage": "sha256:847f1b5cdf4ad1a75da324f1b0d778184784556383497452f562e1ee11de99a2",
+        "users": 2,
+        "actualDesktopContainers": true,
+        "nativeDoneBotStatus": true,
+        "nativeCUAFrame": true,
+        "originalMCPBridge": true,
+        "boundedFileDownload": true,
+        "executionUID1000": true,
+        "otherSocketAndVolumeDenied": true,
+        "crossDesktopNetworkDenied": true,
+        "stopStartPersistence": true,
+        "rawViewerWebSocket": true,
+        "viewerExcludesDesktopExec": true,
+        "persistedDiskQuotaAndRestoreAfterDefaultIncrease": true,
+        "nativeViewerWebSocket": true,
+        "runtimeLeaseExpiryStopsAndDisconnectsDesktop": true,
+        "subscriptionStopDisconnectsViewer": true,
+        "stoppedRuntimeRefusesDesktopAccess": true,
+        "combinedEncryptedBackups": true,
+        "corruptionRejectsBeforeEitherOverwrite": true,
+        "idempotentTwoDiskRestore": true,
+        "interruptedTwoDiskRestoreRecovered": true,
+        "explicitDesktopUpgradeRetainsHome": true,
+        "idleStop": true,
+        "purgeRemovesDesktopData": true
+      }
+    ],
+    "egress-verification": [
+      {
+        "result": "controlled_egress_fixture_passed",
+        "kernel": "7.0.0-1017-azure",
+        "node": "v24.18.0",
+        "docker": "28.0.4",
+        "nft": "nftables v1.0.9 (Old Doc Yak #3)",
+        "image": "sha256:3653d6b610757c512adff38d517cb2a342e2683cf559890e5c1578f2fb8cd482",
+        "users": 2,
+        "publicHTTP": true,
+        "publicHTTPSAndDNS": true,
+        "gatewayAnonymous401": true,
+        "tenantNetworkDenied": true,
+        "hostPrivateAndPublicDenied": true,
+        "metadataDenied": true,
+        "customPublicRangeDenied": true,
+        "unapprovedTCPAndUDPDenied": true,
+        "IPv6Denied": true,
+        "mappedIPv4AndRebindingDenied": true,
+        "unsolicitedInboundDenied": true,
+        "firewallUnavailableBlocksCreation": true,
+        "foreignFirewallTablePreserved": true,
+        "failedAtomicUpdateRetainsPolicy": true,
+        "explicitCohostGatewayHTTPS": true,
+        "cohostOtherPortsAndHostAddressesDenied": true,
+        "cohostCrossTenantDenied": true,
+        "gatewayExceptionRemovalRestoresDeny": true,
+        "agentRecreation": true,
+        "scopedNetworkRemoval": true
+      }
+    ],
+    "linux-verification": [
+      {
+        "result": "linux_fixture_passed",
+        "platform": "linux",
+        "arch": "x64",
+        "kernel": "7.0.0-1017-azure",
+        "node": "v24.18.0",
+        "dockerServer": "28.0.4",
+        "image": "sha256:3653d6b610757c512adff38d517cb2a342e2683cf559890e5c1578f2fb8cd482",
+        "users": 2,
+        "separateNetworkNamespaces": true,
+        "crossVolumeDenied": true,
+        "dockerSocketAbsent": true,
+        "controlSecretsAbsent": true,
+        "networkDenied": true,
+        "persistence": true,
+        "scopedPurge": true,
+        "publicInternetEgress": false
+      }
+    ]
+  },
+  "productionDeployed": false,
+  "limits": {
+    "runtime": {
+      "cpuCores": 1,
+      "memoryGiB": 2,
+      "persistentStorageGiB": 5
+    },
+    "desktop": {
+      "cpuCores": 1,
+      "memoryGiB": 2,
+      "persistentStorageGiB": 10
+    },
+    "total": {
+      "cpuCores": 2,
+      "memoryGiB": 4,
+      "persistentStorageMaxGiB": 15
+    },
+    "existingSmallerDisksPreserved": true
+  },
+  "limitations": [
+    "Registry manifests and image configs were verified anonymously; this is not a production node rollout.",
+    "Resource limits require the matching Cloud agent code; replacing image references alone does not update node code or existing instances.",
+    "Local Bots using the Cloud desktop still require the local runtime to remain running."
+  ]
+}

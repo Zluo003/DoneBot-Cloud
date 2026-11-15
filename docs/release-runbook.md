@@ -4,7 +4,7 @@
 
 ## 已有节点的镜像更新
 
-当前推荐为 2026-11-15 发布的 `linux/amd64` 双镜像，DoneBot 源码 `c7b31ef3edc2a0d1282e2de5d5b07b38b379bc06`；默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-15-muse-amd64.env](../deploy/images/2026-11-15-muse-amd64.env)，原始证据见 [发布记录](verification/images-2026-11-15-muse-amd64.json)。正式平台发布经真实 Linux 验证后推送 GHCR，节点直接在线拉取。
+当前推荐为 2026-11-16 发布的 `linux/amd64` API 专用双镜像，DoneBot 源码 `cf396bc1a526a908f0a302f8d51cd26151240271`；默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-16-api-amd64.env](../deploy/images/2026-11-16-api-amd64.env)，原始证据见 [发布记录](verification/images-2026-11-16-api-amd64.json)。正式平台发布经真实 Linux 验证后推送 GHCR，节点直接在线拉取。
 
 已有付费实例按[节点镜像滚动升级](deployment.md#节点镜像滚动升级)维护，不重复执行下述首次发布的开通或数据库初始化步骤：
 
@@ -35,7 +35,7 @@ node scripts/release-candidate.mjs --verify "$candidate_dir/manifest.json"
 | --- | --- |
 | donebot-api 后端 | 候选网关源码、现有锁文件和正常构建链；包含 Cloud 迁移 260–264、主控与节点协议、浏览器会话和安装凭据服务 |
 | donebot-api 前端 | 同一候选中的 Vue 前端；Cloud 页面与唯一管理后台随主控发布 |
-| DoneBot 服务镜像 | 同一候选 DoneBot 源码的 `server` target；包含 Cloud 凭据、会话与桌面适配，使用正式完整引擎配置；隔离测试的 `ENGINES=` 不能直接作为生产引擎验收 |
+| DoneBot 服务镜像 | 同一候选 DoneBot 源码的 API 专用 `cloud-service` target；包含 Cloud 凭据、会话与桌面适配，使用正式完整引擎配置；隔离测试的 `ENGINES=` 不能直接作为生产引擎验收 |
 | 专属桌面镜像 | 用同一 DoneBot 候选的原版生成函数导出 Dockerfile；按部署文档构建，保留 CUA/image-layer labels |
 | Cloud 节点 | 候选 Cloud 源码及 `package-lock.json`，Node 24.13–24.x；agent、worker、maintenance 及 systemd 模板成套更新 |
 

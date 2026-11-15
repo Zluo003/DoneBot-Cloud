@@ -64,7 +64,7 @@ DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU 
 
 完整命令、持久配置、旧 unit 兼容步骤及节点环境文件见 [部署说明](docs/deployment.md)，回退边界见 [发布说明](docs/release-runbook.md)。网关在线更新只更新网关程序；Cloud 节点代码及 DoneBot/桌面镜像按节点升级流程单独发布。
 
-Cloud 节点默认从 GHCR 在线拉取已发布的两类镜像。当前推荐为 2026-11-15 的 [x64 双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43704284577)，DoneBot 源码 `6c314340414e11006b62939a99c9967bc48f5b60`，包含 HTTP 响应中断防护、Cloud 页面缓存及此前的手机、媒体和自动化适配。节点退出恢复还需更新 agent/worker 至 `682308ad059f3d81d4334dd3b96586db7608930e` 或后续版本。默认配置入口为 [current-amd64.env](deploy/images/current-amd64.env)，本次不可变清单为 [2026-11-15-recovery-amd64.env](deploy/images/2026-11-15-recovery-amd64.env)；直接拉取命令见 [已发布镜像](docs/deployment.md#已发布的-amd64-镜像)。历史 11 月 13/14 日镜像保留用于核对，不作为本次升级目标。
+Cloud 节点默认从 GHCR 在线拉取已发布的两类镜像。当前推荐为 2026-11-15 的 [x64 双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43716718880)，DoneBot 源码 `c7b31ef3edc2a0d1282e2de5d5b07b38b379bc06`，新增 Muse 视频及图片／视频首选和备用模型，并包含 HTTP 响应中断防护、Cloud 页面缓存及手机适配。桌面持续会话续期、返回本地和保存项续连需更新桌面应用。节点退出恢复还需更新 agent/worker 至 `682308ad059f3d81d4334dd3b96586db7608930e` 或后续版本。默认在线入口为 [当前推荐清单](https://github.com/Zluo003/DoneBot-Cloud/releases/download/cloud-images-amd64-current/registry-images.env)，本地副本为 [current-amd64.env](deploy/images/current-amd64.env)，本次固定版本为 [2026-11-15-muse-amd64.env](deploy/images/2026-11-15-muse-amd64.env)；直接拉取命令见 [已发布镜像](docs/deployment.md#已发布的-amd64-镜像)。历史镜像文件保留用于核对，不作为本次升级目标。
 
 更新已有节点时按 [节点镜像滚动升级](docs/deployment.md#节点镜像滚动升级) 操作：先备份并使用旧配置停止 worker、agent，再修改镜像值，对每个实例执行受控升级准备，最后恢复服务。镜像已拉取、`agent.env` 已修改、实例“运行中”都不能证明容器已升级；必须核对实际容器的 `Config.Image`、源码 revision，以及手机状态接口。
 
@@ -109,3 +109,6 @@ npm run verify:donebot
 - [发布候选、迁移顺序与回退](docs/release-runbook.md)
 
 真实网关登录、开通确认、两用户独立聊天、停启、到期停机、续费保留数据及超期回收已完成 Chrome 联合验收，使用私有 PostgreSQL、真实处理器和合成余额。剩余工作为打包客户端 GUI、生产模型与目标服务器容量验收。节点 capacity 是管理员配置的实例名额，不是硬件承载能力的实测值。已有验证的范围与限制见 [首阶段进度](docs/first-milestone.md)。
+
+
+API 专用服务镜像候选：新版桌面共用安装包前端，Cloud 通过 `cloud-service` target 仅部署 API/运行服务，手机继续使用原加密通道。须先更新桌面再更新服务镜像；实例根页面 404 为预期结果。此项尚未发布，不能直接复用旧摘要声称已升级，详见 [部署说明](docs/deployment.md#api-专用-cloud-运行镜像候选尚未发布)。

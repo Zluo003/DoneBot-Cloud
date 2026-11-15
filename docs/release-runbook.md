@@ -4,7 +4,7 @@
 
 ## 已有节点的镜像更新
 
-当前推荐为 2026-11-15 发布的 `linux/amd64` 双镜像，DoneBot 源码 `6c314340414e11006b62939a99c9967bc48f5b60`；默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-15-recovery-amd64.env](../deploy/images/2026-11-15-recovery-amd64.env)，原始证据见 [发布记录](verification/images-2026-11-15-recovery-amd64.json)。正式平台发布经真实 Linux 验证后推送 GHCR，节点直接在线拉取。
+当前推荐为 2026-11-15 发布的 `linux/amd64` 双镜像，DoneBot 源码 `c7b31ef3edc2a0d1282e2de5d5b07b38b379bc06`；默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-15-muse-amd64.env](../deploy/images/2026-11-15-muse-amd64.env)，原始证据见 [发布记录](verification/images-2026-11-15-muse-amd64.json)。正式平台发布经真实 Linux 验证后推送 GHCR，节点直接在线拉取。
 
 已有付费实例按[节点镜像滚动升级](deployment.md#节点镜像滚动升级)维护，不重复执行下述首次发布的开通或数据库初始化步骤：
 
@@ -65,3 +65,10 @@ node scripts/release-candidate.mjs --verify "$candidate_dir/manifest.json"
 - 回退或停机不等于取消收费成功。核对已激活/未激活的退款规则和每笔流水；不手工重复扣退费。所有资源失败保留可见错误，恢复后使用原幂等键核对未完成操作。
 
 本次文档更新没有执行生产迁移、真实扣费、DNS/TLS 修改或用户实例操作；已发布镜像及其验证范围以上述发布记录为准。外部告警、异地灾备、目标机器容量、完整安全审计和打包客户端仍以阶段清单为准。
+
+
+## API 专用服务镜像发布顺序
+
+此次候选使用 DoneBot Dockerfile 的 `cloud-service` target，不含聊天前端；通用自托管 `server` target 仍包含网页，不能混用。先交付共用安装包前端的桌面客户端，再发布并更新 Cloud 服务镜像，避免旧桌面加载实例根路径得到 404。`images:prepare` 已选择 `cloud-service`。保留 Bot 工具浏览器及图形桌面，沿用不可变摘要、归属验证、数据保留与显式容器升级。
+
+发布前验证 `/api/health` 返回 `static=false`、`/api/donebot/mobile/status` 存在、`/app/dist/index.html` 不存在、`GET /` 返回 404；再检查桌面本地界面到隔离 Cloud 的 Cookie、API、SSE、WebSocket、上传与下载。Muse 能力登记同步为 4–10 秒、默认 6 秒。新的摘要必须来自实际发布和对应架构验证；当前版本记录中的旧摘要不自动包含本次候选改动。

@@ -49,7 +49,7 @@ export async function prepareImages({ source, revision, platform, output, contex
     const images = {};
     for (const kind of ['service', 'desktop']) {
       const iidfile = join(staging, kind + '.iid');
-      await docker(['build', '--platform', platform, ...(kind === 'service' ? ['--target', 'server'] : []), '--label', 'org.opencontainers.image.revision=' + revision, '--iidfile', iidfile, '--tag', `donebot-cloud-build:${kind}-${suffix}`, kind === 'service' ? snapshot : desktop]);
+      await docker(['build', '--platform', platform, ...(kind === 'service' ? ['--target', 'cloud-service'] : []), '--label', 'org.opencontainers.image.revision=' + revision, '--iidfile', iidfile, '--tag', `donebot-cloud-build:${kind}-${suffix}`, kind === 'service' ? snapshot : desktop]);
       const id = (await readFile(iidfile, 'utf8')).trim();
       if (!/^sha256:[a-f0-9]{64}$/.test(id)) throw new Error(`invalid ${kind} image ID`);
       const inspected = JSON.parse(await docker(['image', 'inspect', id]));

@@ -99,24 +99,24 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 
 #### 已发布的 amd64 镜像
 
-当前推荐为 2026-11-15 响应中断修复后的[成功发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43704284577)，包含手机连接器、媒体/附件、群聊、自动化开关及桌面端图片输入修复。[发布与注册表核验记录](verification/images-2026-11-15-recovery-amd64.json)保留源码、不可变摘要与真实 Linux 验证结果。2026-11-13、2026-11-14 的文件只保留作历史核对，不是本次升级目标。
+当前推荐为 2026-11-15 Muse 与默认媒体模型更新后的[成功发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43716718880)，包含首选／备用模型、失败告知及视频备用确认，并保留此前的手机、附件、群聊及自动化适配。[发布与注册表核验记录](verification/images-2026-11-15-muse-amd64.json)保留源码、不可变摘要与真实 Linux 验证结果。历史文件仅供核对，不是本次升级目标。
 
-该发布包含 HTTP 响应中断防护及 Cloud 页面缓存。桌面自动续连需更新客户端；意外退出自动恢复需另行更新节点 agent/worker 至 `682308ad059f3d81d4334dd3b96586db7608930e` 或后续版本，不能只换镜像。有效租约下按现有轮询恢复，连续退出使用 5、10、20 秒至 300 秒的有界退避；主动停机、撤销或租约失效不会拉起。Docker 保留 `restart=no`。
+该发布包含 HTTP 响应中断防护及 Cloud 页面缓存。停留 Cloud 时提前续期、会话结束页返回本地和保存入口续连需安装新版客户端；本次不更改网关的登录期限。Muse 需网关部署对应接口、迁移和模型授权，仅升级镜像不会自动开放模型。意外退出自动恢复需另行更新节点 agent/worker 至 `682308ad059f3d81d4334dd3b96586db7608930e` 或后续版本，不能只换镜像。有效租约下按现有轮询恢复，连续退出使用 5、10、20 秒至 300 秒的有界退避；主动停机、撤销或租约失效不会拉起。Docker 保留 `restart=no`。
 
-DoneBot 源码固定为 `6c314340414e11006b62939a99c9967bc48f5b60`，Cloud 验证代码为 `682308ad059f3d81d4334dd3b96586db7608930e`。两镜像已通过真实双用户服务、受控出网及专属桌面验证，并核对公开注册表清单和配置；平台为 `linux/amd64`，不要用于 ARM64 节点。
+DoneBot 源码固定为 `c7b31ef3edc2a0d1282e2de5d5b07b38b379bc06`，Cloud 验证代码为 `cea625e81fe5f74fb4317e1d3b8837478f6e2710`。两镜像已通过真实双用户服务、受控出网及专属桌面验证，并核对公开注册表清单和配置；平台为 `linux/amd64`，不要用于 ARM64 节点。
 
-默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-15-recovery-amd64.env](../deploy/images/2026-11-15-recovery-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
+默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-15-muse-amd64.env](../deploy/images/2026-11-15-muse-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
 
 ```dotenv
-CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:da47aaaf3e6a67b9e0a00714fc166cc1e6d16b8815e14d8a1f49bc9f7e5eadca
-CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:5d13bfa2c236850e9739d9a77a3ffe68482e6b3e0f047f623a413b7bbbda48c6
+CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:a88bc29efa1ba6cb072e1978082f3f908da5adab10c85f90c92e9aa888d3e266
+CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:4572bc98e5b66fa4a0dd476e750fc18d81dfa5be0213f12deadf02bf72103a21
 ```
 
 在 amd64 节点直接在线拉取，无需上传离线包或在节点编译 DoneBot：
 
 ```sh
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:da47aaaf3e6a67b9e0a00714fc166cc1e6d16b8815e14d8a1f49bc9f7e5eadca
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:5d13bfa2c236850e9739d9a77a3ffe68482e6b3e0f047f623a413b7bbbda48c6
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:a88bc29efa1ba6cb072e1978082f3f908da5adab10c85f90c92e9aa888d3e266
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:4572bc98e5b66fa4a0dd476e750fc18d81dfa5be0213f12deadf02bf72103a21
 ```
 
 镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应包含上述 Cloud 验证提交及其兼容维护入口，已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费或目标节点状态。
@@ -151,7 +151,7 @@ npm run images:prepare -- \
   --output /srv/donebot-images-UNIQUE
 ```
 
-输出目录必须尚不存在且位于源码仓库外，父目录需存在。可先加 `--dry-run` 核对来源；该模式不调用 Docker。ARM64 节点使用 `--platform linux/arm64`；跨架构构建需要构建机已配置相应的 BuildKit 模拟支持。工具从指定 Git 提交导出源码快照，不把工作目录、`.env` 或用户数据送入构建上下文；桌面生成器在临时 HOME 中运行。构建使用原版 `server` target 和默认构建参数，不注入 fixture 引擎或另复制服务。两个镜像的源码标签、实际 image ID 和平台核对成功后，才生成完成清单。
+输出目录必须尚不存在且位于源码仓库外，父目录需存在。可先加 `--dry-run` 核对来源；该模式不调用 Docker。ARM64 节点使用 `--platform linux/arm64`；跨架构构建需要构建机已配置相应的 BuildKit 模拟支持。工具从指定 Git 提交导出源码快照，不把工作目录、`.env` 或用户数据送入构建上下文；桌面生成器在临时 HOME 中运行。构建使用 DoneBot 的 API 专用 `cloud-service` target 和默认构建参数，不注入 fixture 引擎或另复制服务。两个镜像的源码标签、实际 image ID 和平台核对成功后，才生成完成清单。
 
 输出包含 `manifest.json`、`agent-images.env`、`desktop/Dockerfile`、`images.tar` 和 `checksums.txt`。将整个目录安全复制到节点，在节点执行：
 
@@ -164,10 +164,10 @@ cat agent-images.env
 
 把 `agent-images.env` 的两个值合入下述 root 管理的 `agent.env`。它们是本地不可变 image ID，不是 registry digest；离线包在目标节点加载后可直接使用。保留清单和可信渠道取得的校验和，不能把本地 ID 拼成 `repository@sha256:…`。只在当前构建机使用时可加 `--no-archive`；这时不生成 tar/校验和。工具保留构建产物，不部署、启动、清理旧镜像或覆盖既有配置；已有实例更换镜像仍按下述受控升级流程操作。
 
-也可以沿用注册表方式。镜像复用 DoneBot 的 `server` target，从验证过的源码构建/发布后按不可变摘要配置。不要使用 `cloud-home` target，也不要使用可变 `latest`：
+也可以沿用注册表方式。镜像复用 DoneBot 的 `cloud-service` target，从验证过的源码构建/发布后按不可变摘要配置。不要使用 `cloud-home` target，也不要使用可变 `latest`：
 
 ```sh
-docker build --target server -t your-registry/donebot:reviewed /path/to/DoneBot
+docker build --target cloud-service -t your-registry/donebot:reviewed /path/to/DoneBot
 ```
 
 发布并取得实际摘要后，将 `repository@sha256:实际摘要` 填入 agent 配置。该步骤没有在本轮执行，文档不提供虚构摘要。
@@ -311,9 +311,9 @@ Docker 仍保持 `restart=no`，避免 Docker daemon 重启时绕过租约直接
 
 | 核对项 | 旧发布 | 本次发布 |
 | --- | --- | --- |
-| 服务摘要开头 | `ad2a1b3a2461` | `da47aaaf3e6a6` |
-| 同次桌面摘要开头 | `90c798940628` | `5d13bfa2c236` |
-| DoneBot 源码 revision | `75704dd` | `6c31434` |
+| 服务摘要开头 | `da47aaaf3e6a` | `a88bc29efa1ba` |
+| 同次桌面摘要开头 | `5d13bfa2c236` | `4572bc98e5b6` |
+| DoneBot 源码 revision | `6c31434` | `c7b31ef` |
 
 先根据实例 UUID、agent 的 deployment ID 和 `cn.donebot.cloud.*` 标签确认本节点的运行及桌面容器。对明确归属的运行容器执行只读检查，将 `SERVICE_CONTAINER_NAME` 换成其完整名称：
 
@@ -352,7 +352,7 @@ sudo systemctl start donebot-cloud-agent
 sudo systemctl start donebot-cloud-worker
 ```
 
-运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `6c314340414e11006b62939a99c9967bc48f5b60`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
+运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `c7b31ef3edc2a0d1282e2de5d5b07b38b379bc06`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
 
 ### 手机中的 Cloud 显示离线
 
@@ -397,3 +397,12 @@ sudo /usr/bin/node --env-file=/etc/donebot-cloud/agent.env /opt/donebot-cloud/sr
 命令要求运行服务和桌面均停止，只移除通过旧摘要及完整规格校验的桌面容器，保留资料盘、备份和网络。若同时更新运行镜像，先按前述 `prepare-upgrade` 准备运行容器，再准备桌面容器；重启 agent/worker 后由主控租约启动，桌面在下次使用时创建。不自动回滚数据 schema，不允许直接换摘要后覆盖旧资源。
 
 节点 TLS 反向代理的备份请求等待时间应至少 310 秒，主控针对备份的响应头等待为 300 秒。长备份期间仍需维持 worker 心跳与短期租约；超时后用同一请求键核对和重试，不以新键重复创建备份。
+
+
+## API 专用 Cloud 运行镜像（候选，尚未发布）
+
+新版桌面客户端从安装包读取聊天 HTML、JS、CSS 和字体，Cloud 只提供账号校验、Bot/会话 API、SSE、WebSocket 和附件。桌面仍使用各实例独立 HTTPS origin 和原生 Cookie；不代理或复制网关主站凭据，不改写 API 路径。手机继续使用原有加密 API 通道。Cloud 容器不再包含 `/app/dist`，`GET /` 返回 404 是预期行为；用 `/api/health`、`/api/donebot/mobile/status` 检查服务。网关 `/cloud` 控制台与 Bot 使用的浏览器、专属图形桌面仍保留。
+
+升级顺序为先更新桌面客户端，再发布并部署 `cloud-service` 服务镜像。旧桌面依赖云端静态页面，不能先切成 API 专用镜像。不要向已有 `server` 镜像仅删除目录来模拟升级。新服务同时包含 Muse 的 4–10 秒能力登记，默认 6 秒；现有已发布镜像摘要记录不代表已含本次改动。
+
+按本节生成并核验新服务摘要后，沿用既有保留数据的受控实例升级流程；桌面镜像无本次源码变化时可保持原摘要。不得改写发布记录或使用未经发布验证的本地测试 image ID。此次拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。

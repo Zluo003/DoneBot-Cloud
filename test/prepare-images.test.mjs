@@ -13,7 +13,7 @@ async function fixture(t) {
   await mkdir(source);
   const real = async (bin, args) => (await promisify(execFile)(bin, args)).stdout;
   const git = args => real('git', ['-C', source, ...args]);
-  await git(['init', '-q']); await writeFile(join(source, 'Dockerfile'), 'FROM scratch AS server\n');
+  await git(['init', '-q']); await writeFile(join(source, 'Dockerfile'), 'FROM scratch AS cloud-service\n');
   await git(['add', 'Dockerfile']); await git(['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.test', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture']);
   const revision = (await git(['rev-parse', 'HEAD'])).trim(), calls = [], images = new Map();
   let architecture = 'amd64';
@@ -44,7 +44,7 @@ test('prepares both fixed images and an offline bundle without modifying source'
   assert.equal(await readFile(join(f.output, 'checksums.txt'), 'utf8'), result.bundle.sha256 + '  images.tar\n');
   assert.match(await readFile(join(f.output, 'agent-images.env'), 'utf8'), /^CLOUD_DONEBOT_IMAGE=sha256:[a-f0-9]{64}\nCLOUD_DESKTOP_IMAGE=sha256:[a-f0-9]{64}\n$/);
   const builds = f.calls.filter(c => c.args.includes('build'));
-  assert.equal(builds.length, 2); assert.ok(builds[0].args.includes('--target')); assert.ok(builds[0].args.includes('server'));
+  assert.equal(builds.length, 2); assert.ok(builds[0].args.includes('--target')); assert.ok(builds[0].args.includes('cloud-service'));
   assert.ok(!builds.some(c => c.args.includes('--build-arg') || c.args.includes('cloud-home')));
   assert.equal((await promisify(execFile)('git', ['-C', f.source, 'status', '--porcelain'])).stdout, '');
 });

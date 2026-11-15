@@ -2,11 +2,17 @@
 
 记录自 2026-11-11 起。功能及资源变更验证均使用临时目录、随机合成账户/令牌、隔离 DoneBot fixture 或测试私有 PostgreSQL。用户明确提供的测试账号仅用于线上登录及只读身份接口核对，没有变更实际余额、用户应用或已有实例；凭据和令牌未落盘。
 
+## 2026-11-15：Muse、默认媒体模型与持续 Cloud 会话
+
+[run 43716718880](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43716718880) 成功，固定 DoneBot `c7b31ef3edc2a0d1282e2de5d5b07b38b379bc06`、Cloud `cea625e81fe5f74fb4317e1d3b8837478f6e2710`。真实 Linux 双租户隔离、受控出网及专属桌面检查通过后发布 GHCR；匿名核对服务摘要 `a88bc29efa1ba…`、桌面摘要 `4572bc98e5b66…` 的配置、架构及源码标签通过，见[发布证据](verification/images-2026-11-15-muse-amd64.json)。工作流已自动更新[当前推荐清单](https://github.com/Zluo003/DoneBot-Cloud/releases/download/cloud-images-amd64-current/registry-images.env)，与本地 `current-amd64.env` 一致。
+
+桌面客户端用真实 Electron Cookie fixture 验证提前续期、不导航、立即返回本地及重开保存项；48 项 Electron Node 检查、Cloud／缓存／文档相关 36 项 Vitest、构建和隔离打包服务 smoke 通过。媒体模型及备用确认的专项记录见相邻 DoneBot 仓库 `docs/verification/donebot-media-settings.md`。加速到期 fixture 不等同于多小时公网稳定性测试。未部署生产，未删除旧镜像；本项目文档改动交由用户推送。
+
 ## 2026-11-15：响应中断修复镜像与当前推荐入口
 
 [run 43704284577](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43704284577) 成功，固定 DoneBot `6c314340414e11006b62939a99c9967bc48f5b60`、Cloud `682308ad059f3d81d4334dd3b96586db7608930e`。真实 Linux 双用户、受控出网及专属桌面检查通过后发布 GHCR；匿名核对两镜像的注册表摘要、配置摘要、linux/amd64 平台及源码标签通过，见 [完整发布证据](verification/images-2026-11-15-recovery-amd64.json)。
 
-服务摘要为 `da47aaaf3e6a…`，桌面摘要为 `5d13bfa2c236…`。[当前推荐清单](https://github.com/Zluo003/DoneBot-Cloud/releases/download/cloud-images-amd64-current/registry-images.env) 与本地 [current-amd64.env](../deploy/images/current-amd64.env) 指向同一组正式摘要；后续清单自动更新的工作流改动仍由用户推送。本次没有删除旧镜像，也没有部署生产。
+该次服务摘要为 `da47aaaf3e6a…`，桌面摘要为 `5d13bfa2c236…`，现保留作历史核对；当前部署目标见本页最新记录。本次没有删除旧镜像，也没有部署生产。
 
 DoneBot HTTP 中断、续连及缓存的 28 项 Vitest、45 项 Electron Node 测试、真实 Electron Cookie fixture、构建与隔离服务 smoke 通过。Cloud 37 项节点测试通过。真实 Linux 发布检查证明本次镜像的隔离和桌面流程；本轮新增崩溃退避逻辑由合成 runtime 测试覆盖，没有额外声称真实 Docker 崩溃/恢复或生产恢复已验收。
 

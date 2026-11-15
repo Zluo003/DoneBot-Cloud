@@ -12,6 +12,18 @@ import { lookup } from 'node:dns/promises';
 const result = {}, allowed = new Set(['ENOTFOUND','EAI_AGAIN','ECONNREFUSED','ECONNRESET','ENETUNREACH','EHOSTUNREACH','ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','CERT_HAS_EXPIRED','DEPTH_ZERO_SELF_SIGNED_CERT','SELF_SIGNED_CERT_IN_CHAIN','UNABLE_TO_VERIFY_LEAF_SIGNATURE','UNABLE_TO_GET_ISSUER_CERT_LOCALLY','ERR_TLS_CERT_ALTNAME_INVALID']);
 const reasons = new Set(['API_KEY_REQUIRED','INVALID_API_KEY','API_KEY_DISABLED','USER_NOT_FOUND','USER_INACTIVE','ACCESS_DENIED','GROUP_NOT_ALLOWED','GROUP_DISABLED','DONEBOT_INSTALL_NOT_FOUND','DONEBOT_INSTALL_REVOKED','API_KEY_NOT_FOUND']);
 const failure = error => ({ error: allowed.has(error?.cause?.code || error?.code) ? error?.cause?.code || error?.code : error?.name === 'TimeoutError' ? 'TIMEOUT' : 'NETWORK_FAILED' });
+try {
+  const response = await fetch('http://127.0.0.1:18899/api/donebot/mobile/status', { redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(5000) });
+  result.mobile = { status: response.status };
+  if (response.ok) {
+    const value = await response.json();
+    result.mobile.authenticated = value.authenticated === true;
+    result.mobile.registered = value.registered === true;
+    result.mobile.relay = ['connected', 'connecting', 'off'].includes(value.relay) ? value.relay : 'unknown';
+    result.mobile.problem = ['', 'unavailable', 'login', 'network'].includes(value.problem) ? value.problem : 'unknown';
+    if (/^(donebot\\.cn\\/mobile-relay|relay[1-9][0-9]?\\.donebot\\.cn)$/.test(value.node || '')) result.mobile.node = value.node;
+  }
+} catch (error) { result.mobile = failure(error); }
 try { const addresses = await lookup('donebot.cn', { all: true }); result.dns = { ok: true, ipv4: addresses.filter(x => x.family === 4).length, ipv6: addresses.filter(x => x.family === 6).length }; } catch (error) { result.dns = failure(error); }
 let credential;
 try {
@@ -46,7 +58,7 @@ export async function diagnoseModels({ instance, stateDir, binary = '/usr/bin/do
   const run = args => execute(binary, args, { timeout: 45000, maxBuffer: 4 * 1024 * 1024 });
   const values = JSON.parse((await run(['container', 'inspect', name])).stdout), container = values[0];
   if (values.length !== 1 || container?.Config?.Labels?.['cn.donebot.cloud.deployment'] !== deployment || container?.Config?.Labels?.['cn.donebot.cloud.instance'] !== instance || container?.Name !== '/' + name) throw new Error('diagnostic_ownership_mismatch');
-  const result = { instance_id: instance, state: container.State?.Status, network_mode: container.HostConfig?.NetworkMode, dns: container.HostConfig?.Dns || [], probe: null };
+  const result = { instance_id: instance, image: container.Config?.Image, state: container.State?.Status, network_mode: container.HostConfig?.NetworkMode, dns: container.HostConfig?.Dns || [], probe: null };
   if (container.State?.Running) result.probe = JSON.parse((await run(['container', 'exec', name, 'node', '--input-type=module', '-e', probe])).stdout);
   return result;
 }

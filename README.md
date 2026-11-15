@@ -2,7 +2,7 @@
 
 DoneBot 的多服务器云实例工程。donebot-api 负责账户、余额、月付订阅、实例归属、调度和唯一管理后台；本项目提供每台 Linux 主机上的 worker、受信 Docker agent 和访问转发。运行服务复用 DoneBot 镜像，不复制其源码。
 
-已实现可运行工程、PostgreSQL 主控、双 worker、月付余额扣款、统一后台、网页和原生客户端连接协议、自动安装凭据、磁盘限额、加密备份恢复、节点令牌轮换和显式镜像升级。真实 DoneBot 隔离进程与一次性 Debian 13 ARM64 容器已完成对应验证，包括原生浏览器、资料持久化、系统重启及故障恢复。**尚未部署生产。每用户专属桌面已按明确授权完成适配及真实 Linux 验证；生产容量及打包客户端 GUI 尚未验收。**
+已实现可运行工程、PostgreSQL 主控、双 worker、月付余额扣款、统一后台、网页和原生客户端连接协议、自动安装凭据、磁盘限额、加密备份恢复、节点令牌轮换和显式镜像升级。真实 DoneBot 隔离进程与一次性 Debian 13 ARM64 容器已完成对应验证，包括原生浏览器、资料持久化、系统重启及故障恢复。**每用户专属桌面已按明确授权完成适配及真实 Linux 验证；发布记录不代表目标节点已更新，生产容量及打包客户端 GUI 尚未验收。**
 
 ## 业务规则
 
@@ -64,9 +64,11 @@ DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU 
 
 完整命令、持久配置、旧 unit 兼容步骤及节点环境文件见 [部署说明](docs/deployment.md)，回退边界见 [发布说明](docs/release-runbook.md)。网关在线更新只更新网关程序；Cloud 节点代码及 DoneBot/桌面镜像按节点升级流程单独发布。
 
-镜像可以在一台构建机准备一次，再分发给同架构节点。运行 `npm run images:prepare -- --source /path/to/DoneBot --revision <已审核的完整SHA> --platform linux/amd64 --output /path/to/new-bundle`，会复用原版服务 Dockerfile 和桌面生成器，输出两个固定 image ID、离线 `images.tar`、校验和及 `agent-images.env`。DoneBot 源码需干净且已安装依赖，构建机需支持目标架构；节点只需校验和 `docker load`，见 [镜像准备](docs/deployment.md#镜像准备与离线分发)。这条命令不发布镜像，也不修改正在运行的节点。
+Cloud 节点默认从 GHCR 在线拉取已发布的两类镜像。当前推荐为 2026-11-15 的 [x64 双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43687113265)，DoneBot 源码 `75704dddf140e27aa319de0c0baef7d54d366ebf`，包含手机连接、媒体和自动化适配。默认配置入口为 [current-amd64.env](deploy/images/current-amd64.env)，本次不可变清单为 [2026-11-15-amd64.env](deploy/images/2026-11-15-amd64.env)；直接拉取命令见 [已发布镜像](docs/deployment.md#已发布的-amd64-镜像)。历史 11 月 13/14 日镜像保留用于核对，不作为本次升级目标。
 
-也可在本仓库 Actions 手动运行 **Cloud service and desktop images**，按指定 DoneBot SHA 和架构构建两类镜像，真实 Linux 双用户/桌面验证通过后发布 GHCR，并输出节点可直接使用的固定摘要。DoneBot 和 Cloud 仓库现均已公开。2026-11-13 的 [amd64 双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43387570590) 已通过真实 Linux、出网和桌面验证，可匿名读取；固定摘要见 [节点镜像配置](deploy/images/2026-11-13-amd64.env)，直接拉取命令见 [部署说明](docs/deployment.md#已发布的-amd64-镜像)。
+更新已有节点时按 [节点镜像滚动升级](docs/deployment.md#节点镜像滚动升级) 操作：先备份并使用旧配置停止 worker、agent，再修改镜像值，对每个实例执行受控升级准备，最后恢复服务。镜像已拉取、`agent.env` 已修改、实例“运行中”都不能证明容器已升级；必须核对实际容器的 `Config.Image`、源码 revision，以及手机状态接口。
+
+自建镜像可在本仓库 Actions 手动运行 **Cloud service and desktop images**，真实 Linux 双用户、出网和桌面验证通过后才发布 GHCR。确需离线分发时，才使用 `npm run images:prepare -- --source /path/to/DoneBot --revision <已审核的完整SHA> --platform linux/amd64 --output /path/to/new-bundle` 准备两个固定 image ID、`images.tar` 和校验和，见 [镜像准备](docs/deployment.md#镜像准备与离线分发)。该命令不发布镜像、不修改节点。
 
 网关和 Cloud 节点可以同机。若网关域名解析到节点自身公网 IPv4，需在 `public-web` 下显式配置 `CLOUD_GATEWAY_IPV4`，仅为服务容器放行指定宿主 IP 的 HTTPS；默认宿主拒绝仍然有效。出现“有账号但无模型”时，见 [同机配置与只读诊断](docs/deployment.md#网关和-cloud-节点同机)。
 

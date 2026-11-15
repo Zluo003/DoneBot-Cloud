@@ -1,6 +1,6 @@
 # 主控与多服务器节点部署
 
-Docker、受控出口、存储/备份、浏览器、故障恢复与 systemd 生命周期已在一次性 Debian 13 ARM64 VM 中验证；主控使用私有 PostgreSQL、双 worker 和真实 DoneBot fixture 验证。以下配置尚未在生产服务器执行，剩余工作见首阶段清单。
+Docker、受控出口、存储/备份、浏览器、故障恢复与 systemd 生命周期已在一次性 Debian 13 ARM64 VM 中验证；主控使用私有 PostgreSQL、双 worker 和真实 DoneBot fixture 验证。当前 x64 镜像另通过 GitHub 的真实 Linux 发布验证，见下文已发布镜像；每个目标节点仍须按实际容器完成升级和验收，不能用构建成功代替节点结果。
 
 ## 主控：donebot-api
 
@@ -99,25 +99,25 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 
 #### 已发布的 amd64 镜像
 
-2026-11-14 的[发布流程](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43554033585)已成功发布本轮自有云桌面适配；[发布与注册表核验记录](verification/images-2026-11-14-amd64.json)保留源码、不可变摘要及真实 Linux 验证结果。此前 2026-11-13 的镜像配置保留供历史核对。
+当前推荐为 2026-11-15 的[成功发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43687113265)，包含手机连接器、媒体/附件、群聊、自动化开关及桌面端图片输入修复。[发布与注册表核验记录](verification/images-2026-11-15-amd64.json)保留源码、不可变摘要与真实 Linux 验证结果。2026-11-13、2026-11-14 的文件只保留作历史核对，不是本次升级目标。
 
-DoneBot 源码固定为 `9455c9fedac847753e6d680a4b3a789c5bebee22`，Cloud 验证代码为 `c645768a69d7139351945bbb77ee22511d1e5d1e`。以下两个镜像已完成真实双用户服务、出网隔离和专属桌面验证；注册表清单及镜像配置支持匿名读取，无需节点登录 GitHub。此次发布为 `linux/amd64`，不用于 arm64 节点。
+DoneBot 源码固定为 `75704dddf140e27aa319de0c0baef7d54d366ebf`，Cloud 验证代码为 `22ff903267f3555f8fbfc8d8202694b89fcc8721`。两镜像已通过真实双用户服务、受控出网及专属桌面验证，并核对公开注册表清单和配置；平台为 `linux/amd64`，不要用于 ARM64 节点。
 
-将 [固定镜像配置](../deploy/images/2026-11-14-amd64.env) 中的两个值合入 `/etc/donebot-cloud/agent.env`：
+默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-15-amd64.env](../deploy/images/2026-11-15-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
 
 ```dotenv
-CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:dcdf3074795048f8ed5cd55928d7bff77499e49041aaa2673de292ee0f6492ac
-CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:13ffc989e7c2b9f46fb0be91107126238630dfe81287149fdada33b2c5fc5e5e
+CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:ad2a1b3a2461cfe95e99926d190025f9d1a63f7b1dd7459add8fc597df1ccd36
+CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:90c7989406282e62636ccc5875003acb74e5c058d3a70087eb5d1025b07a70fa
 ```
 
-在 amd64 节点上拉取，无需安装 DoneBot 源码或编译依赖：
+在 amd64 节点直接在线拉取，无需上传离线包或在节点编译 DoneBot：
 
 ```sh
-docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:dcdf3074795048f8ed5cd55928d7bff77499e49041aaa2673de292ee0f6492ac
-docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:13ffc989e7c2b9f46fb0be91107126238630dfe81287149fdada33b2c5fc5e5e
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:ad2a1b3a2461cfe95e99926d190025f9d1a63f7b1dd7459add8fc597df1ccd36
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:90c7989406282e62636ccc5875003acb74e5c058d3a70087eb5d1025b07a70fa
 ```
 
-镜像发布不会自动更新节点。节点须同步至 Cloud 提交 `c645768a69d7139351945bbb77ee22511d1e5d1e` 或包含该提交的版本，资源合计限制为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。新节点使用上述摘要，已有实例按本文“节点镜像滚动升级”和“桌面镜像更新”分别准备，保留数据后再启动。原 `API_KEY_NOT_FOUND` 仍需发布、部署 donebot-api 的运行凭据修复，更新镜像不能替代主控修复。该流水线不验证生产账户扣费或生产节点。
+镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应包含上述 Cloud 验证提交及其兼容维护入口，已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费或目标节点状态。
 
 #### 自行构建与离线包
 
@@ -223,7 +223,7 @@ CLOUD_GATEWAY_IPV4=<已确认的网关公网IPv4>
 只读诊断（使用后台给出的本用户实例 UUID）：
 
 ```sh
-sudo node --env-file=/etc/donebot-cloud/agent.env /实际Cloud工程目录/scripts/diagnose-models.mjs --instance <实例UUID>
+sudo node --env-file=/etc/donebot-cloud/agent.env /实际Cloud工程目录/scripts/diagnose-models.mjs --instance INSTANCE_UUID
 ```
 
 命令核对部署和实例标签，只对指定容器执行 DNS 检查及网关 GET；不启停、创建或删除资源，不提交模型任务，不扣款。凭据只在容器内读取并使用，输出仅含网络模式、DNS 数量、HTTP 状态、允许的错误码/request ID、模型数量和并发字段是否有效，不输出凭据、完整响应、邮箱或余额。`anonymous_models.status=401` 表示网关可达且匿名访问被拒绝；`models/account.status=200` 才证明安装凭据对应的读取成功。它不证明真实模型生成或计费成功。
@@ -272,17 +272,81 @@ sudo node --env-file=/etc/donebot-cloud/agent.env /实际Cloud工程目录/scrip
 
 ## 节点镜像滚动升级
 
-逐节点操作，先在后台暂停该节点新分配。用当前旧配置停止 worker，再停止 agent；ExecStopPost 必须成功，确认本节点所有实例已停止。保全 agent 完整状态，并在旧镜像下创建所需数据备份。不要删除卷、deployment ID 或密钥。
+### 先核对实际容器
 
-拉取并核对新镜像不可变摘要，修改 agent.env 的镜像值。以 root 加载同一 agent.env，针对后台列出的每个实例执行：
+以本页“已发布的 amd64 镜像”及 `current-amd64.env` 为目标，不要把历史清单与当前配置相同误判为升级完成。
+
+| 核对项 | 旧发布 | 本次发布 |
+| --- | --- | --- |
+| 服务摘要开头 | `dcdf30747950` | `ad2a1b3a2461` |
+| 同次桌面摘要开头 | `13ffc989e7c2` | `90c798940628` |
+| DoneBot 源码 revision | `9455c9f` | `75704dd` |
+
+先根据实例 UUID、agent 的 deployment ID 和 `cn.donebot.cloud.*` 标签确认本节点的运行及桌面容器。对明确归属的运行容器执行只读检查，将 `SERVICE_CONTAINER_NAME` 换成其完整名称：
 
 ```sh
-/usr/bin/node /opt/donebot-cloud/src/maintenance.mjs prepare-upgrade INSTANCE_UUID PREVIOUS_IMAGE_DIGEST
+sudo docker container inspect SERVICE_CONTAINER_NAME --format 'image={{.Config.Image}} revision={{index .Config.Labels "org.opencontainers.image.revision"}}'
 ```
 
-命令要求 agent 未监听且独占状态锁；完整核对旧容器和专属卷，只删除已停止的容器，保留卷/磁盘/网络/凭据。重复执行安全，不主动启动实例。恢复 agent、worker 后，只依据新运行租约创建新镜像容器。验证就绪、模型安装凭据和本用户数据后再恢复分配，继续下一节点。正在删除的实例交回主控原流程，不绕过删除锁。
+逐实例记录实际旧的运行与桌面 `Config.Image`，作为维护命令的旧摘要参数；不要只记录可能已提前改过的 `agent.env`。实际运行服务仍为 `dcdf3074…`、源码仍为 `9455c9f` 时，它尚未升级。若运行容器及已存在的桌面容器都已匹配目标，不重复重建，继续核对健康与手机连接。
 
-升级准备失败保持停机并检查错误，不用 `docker rm -f` 绕过属主/规格校验。旧/新 schema 的兼容与回滚须事先验证；本工具不回滚数据，不能通过换回镜像保证恢复旧 schema。原生客户端 `desktop-launch` 是客户端连接协议，不是独立 Linux 桌面功能。
+### 执行运行镜像升级
+
+本次维护会短暂中断该节点已有 Cloud。先在后台暂停新分配，按现有备份流程保全实例数据及完整 agent 状态；用上面的在线命令提前拉取新镜像，核对平台和源码标签。
+
+使用与现有容器匹配的旧配置依次停止 worker、agent。若此前已提前改成新镜像值，应先恢复匹配的旧配置，保证停止与规格检查能够完成。服务名和工程路径按实际安装调整：
+
+```sh
+sudo systemctl stop donebot-cloud-worker
+sudo systemctl stop donebot-cloud-agent
+```
+
+必须确认 agent 的 ExecStopPost 成功，所有本节点运行服务与桌面容器已停止。不要删除卷、deployment ID 或密钥，也不要把关闭新分配当作已有实例已停止。
+
+停止成功后再更新受信节点代码，将本次两个目标镜像值合入原 `agent.env`，保留其余配置、权限和凭据。以 root 加载同一环境文件，针对后台列出的每个已有实例执行；`PREVIOUS_SERVICE_IMAGE` 和 `PREVIOUS_DESKTOP_IMAGE` 使用该实例刚记录的实际旧值：
+
+```sh
+sudo /usr/bin/node --env-file=/etc/donebot-cloud/agent.env /opt/donebot-cloud/src/maintenance.mjs prepare-upgrade INSTANCE_UUID PREVIOUS_SERVICE_IMAGE
+sudo /usr/bin/node --env-file=/etc/donebot-cloud/agent.env /opt/donebot-cloud/src/maintenance.mjs prepare-desktop-upgrade INSTANCE_UUID PREVIOUS_DESKTOP_IMAGE
+```
+
+第二条用于桌面镜像也变更的实例。命令要求 agent 未监听且独占状态锁；完整核对归属、旧镜像与规格，只移除已停止容器，保留卷、磁盘、网络和安装凭据。重复执行安全，不主动启动实例。升级准备失败时保持维护状态并检查错误，不用 `docker rm -f` 绕过校验。
+
+所有实例准备成功后恢复 agent、worker：
+
+```sh
+sudo systemctl start donebot-cloud-agent
+sudo systemctl start donebot-cloud-worker
+```
+
+运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `75704dddf140e27aa319de0c0baef7d54d366ebf`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
+
+### 手机中的 Cloud 显示离线
+
+手机在线状态来自 Cloud 向手机中枢上报的中继连接心跳，不等同于管理后台实例“运行中”。运行服务为旧 `9455c9f` 时没有手机连接器；当前正式服务镜像已在隔离容器内验证手机状态接口返回 200。
+
+在明确归属的运行容器内执行两次只读请求，间隔 10 秒，不通过公网代理：
+
+```sh
+sudo docker exec SERVICE_CONTAINER_NAME curl --fail --silent --show-error http://127.0.0.1:18899/api/health
+sudo docker exec SERVICE_CONTAINER_NAME curl --fail --silent --show-error http://127.0.0.1:18899/api/donebot/mobile/status
+```
+
+验收条件为健康成功、手机状态 HTTP 200、`authenticated=true`、`registered=true`、`relay=connected`，且 `lastHeartbeat` 持续更新。手机刷新后可打开原有 Cloud Bot 和消息。两台主机都接通同一个中继时，本地电脑和 Cloud 各计一台主机；手机会话数按实际连接计算。
+
+| 状态 | 下一步 |
+| --- | --- |
+| HTTP 404，`no route` | 核对实际容器、镜像摘要及源码，不能仅凭配置宣称已升级 |
+| `authenticated=false` | 检查安装凭据加载，不输出凭据文件 |
+| `problem=login` | 检查安装是否被撤销或归属失效 |
+| `problem=unavailable` | 检查网关版本、手机中枢签名设置及可用节点 |
+| `problem=network` | 检查 DNS、TLS 与出网 |
+| `registered=true`、`relay=connecting` | 已向中枢登记，继续检查中继 WSS |
+| `registered=true`、`relay=connected`，手机仍离线 | 核对实例与安装 ID、网关对应主机心跳及手机所选工作空间 |
+
+Cloud 需要到 `donebot.cn:443` 以及下发中继节点 `:443` 的 HTTPS/WSS 出站访问，不向手机开放 18080。网关或中继与 Cloud 节点同机时，公网地址也受宿主拒绝规则约束，按“网关和 Cloud 节点同机”配置显式公网 HTTPS 例外。`CLOUD_EGRESS_MODE=none` 不能用于远程连接。排查不输出 Env、Token 或完整凭据。
+
+旧/新数据 schema 的兼容及回滚须事先验证；维护工具不回滚数据，切回旧镜像不保证恢复。不要删除实例或重新开通付费套餐来处理离线。
 
 ## 尚未验收的运行边界
 
@@ -294,7 +358,7 @@ CPU 1 核、内存/交换总限额 2 GiB、PID 256、共享内存 512 MiB 和默
 先通过主控停止相关实例，停止节点 worker 和 agent，备份完整 agent 状态。更新受信代码和已加载的新桌面镜像摘要后，在相同配置下执行：
 
 ```sh
-node --env-file=/etc/donebot-cloud/agent.env src/maintenance.mjs prepare-desktop-upgrade "$INSTANCE_UUID" "$PREVIOUS_DESKTOP_IMAGE_DIGEST"
+sudo /usr/bin/node --env-file=/etc/donebot-cloud/agent.env /opt/donebot-cloud/src/maintenance.mjs prepare-desktop-upgrade INSTANCE_UUID PREVIOUS_DESKTOP_IMAGE
 ```
 
 命令要求运行服务和桌面均停止，只移除通过旧摘要及完整规格校验的桌面容器，保留资料盘、备份和网络。若同时更新运行镜像，先按前述 `prepare-upgrade` 准备运行容器，再准备桌面容器；重启 agent/worker 后由主控租约启动，桌面在下次使用时创建。不自动回滚数据 schema，不允许直接换摘要后覆盖旧资源。

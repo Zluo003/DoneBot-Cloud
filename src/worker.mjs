@@ -15,6 +15,7 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
   privateDir(stateDir); const manifest = join(stateDir, 'owned.json');
   const owned = new Set(existsSync(manifest) ? JSON.parse(readFileSync(manifest)) : []); for (const id of owned) instanceID(id);
   const leases = new Map(), started = new Set(), needsStop = new Set(), retries = new Map(), tasks = new Map(), streams = new Set(), wss = wsServer();
+  const uptimes = new Map(), recoveries = new Map();
   let current = null, polling = false, stopped = false, lastMasterContact = 0;
   const persist = () => { writeFileSync(manifest + '.tmp', JSON.stringify([...owned]), { mode: 0o600 }); renameSync(manifest + '.tmp', manifest); };
   const allowed = id => !stopped && runLeaseValid(leases.get(id));
@@ -26,7 +27,7 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
     if (action === 'start' && runtimeCredentials) value.gateway = await call('runtime-credential', { instance_id: instanceID(id) });
     if (action === 'start') needsStop.add(id);
     const result = await socketJSON(agentSocket, `/v1/instances/${instanceID(id)}/${action}`, 'POST', value);
-    if (action === 'stop' || action === 'purge') { needsStop.delete(id); started.delete(id); }
+    if (action === 'stop' || action === 'purge') { needsStop.delete(id); started.delete(id); uptimes.delete(id); recoveries.delete(id); }
     return result;
   };
   async function call(verb, value) {
@@ -47,6 +48,7 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
       await execute(id, 'start');
       if (!allowed(id) || leases.get(id)?.generation !== generation) { await execute(id, 'stop'); throw new Fault(403, 'runtime_lease_expired'); }
       started.add(id); retries.delete(id);
+      uptimes.set(id, { at: Date.now(), generation });
       record('instance_started', { instance_id: id });
     } catch (error) {
       started.delete(id);
@@ -128,7 +130,18 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
       lastMasterContact = Date.now();
       leases.clear();
       for (const [id, lease] of renewed) if (runLeaseValid(lease)) leases.set(id, lease);
-      await Promise.all([...owned].filter(allowed).map(async id => { const observed = await execute(id, 'lease'); if (observed.state !== 'running') started.delete(id); }));
+      await Promise.all([...owned].filter(allowed).map(async id => {
+        const observed = await execute(id, 'lease'), uptime = uptimes.get(id), generation = leases.get(id)?.generation;
+        if (uptime?.generation !== generation || uptime && Date.now() - uptime.at >= 60_000) recoveries.delete(id);
+        if (observed.state === 'running' || observed.state === 'busy') return;
+        if (started.delete(id)) {
+          const prior = recoveries.get(id), attempts = prior?.generation === generation ? prior.attempts + 1 : 1;
+          const delay = attempts === 1 ? 0 : Math.min(300_000, 5_000 * 2 ** Math.min(attempts - 2, 6));
+          recoveries.set(id, { generation, attempts });
+          if (delay) retries.set(id, { generation, attempts: 0, until: Date.now() + delay, error: new Fault(503, 'instance_restart_backoff') });
+          record('instance_exited', { instance_id: id, attempt: attempts, restart_in_ms: delay });
+        }
+      }));
       for (const id of owned) if (allowed(id) && !started.has(id) && !tasks.has(id) && current?.op.instance_id !== id && response.command?.instance_id !== id && !(retries.get(id)?.generation === leases.get(id)?.generation && retries.get(id).until > Date.now())) {
         serial(id, () => start(id)).catch(() => {});
       }

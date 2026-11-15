@@ -17,7 +17,11 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
   }
   const queues = new Map(), active = new Map(), deadlines = new Map(), fencing = new Set(), streams = new Set(), wss = wsServer();
   let closing = false;
-  function serial(id, fn) { const next = (queues.get(id) || Promise.resolve()).catch(() => {}).then(fn); queues.set(id, next); return next; }
+  function serial(id, fn) {
+    const next = (queues.get(id) || Promise.resolve()).catch(() => {}).then(fn); queues.set(id, next);
+    void next.finally(() => { if (queues.get(id) === next) queues.delete(id); }).catch(() => {});
+    return next;
+  }
   function disconnect(id) { for (const item of streams) if (item.id === id) { streams.delete(item); item.kill(); } }
   function track(id) { return kill => { const item = { id, kill }; streams.add(item); return () => streams.delete(item); }; }
   const authorized = id => !requireLease || runLeaseValid(deadlines.get(id));
@@ -43,7 +47,15 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
       if (!match) throw new Fault(404, 'not_found'); const id = instanceID(match[1]), action = match[2];
       if (closing) throw new Fault(503, 'agent_closing');
       if (action === 'status' && req.method === 'GET' && !match[3]) return json(res, 200, await runtime.status(id));
-      if (action === 'lease' && req.method === 'POST' && !match[3]) { renew(id, await body(req)); return json(res, 200, { renewed: true, state: active.has(id) ? 'running' : 'stopped' }); }
+      if (action === 'lease' && req.method === 'POST' && !match[3]) {
+        renew(id, await body(req));
+        if (queues.has(id)) return json(res, 200, { renewed: true, state: 'busy' });
+        const value = active.get(id);
+        const observed = value ? await runtime.status(id) : { state: 'stopped' };
+        if (queues.has(id) || active.get(id) !== value) return json(res, 200, { renewed: true, state: 'busy' });
+        if (value && observed.state !== 'running' && active.get(id) === value) { active.delete(id); disconnect(id); }
+        return json(res, 200, { renewed: true, state: active.has(id) && observed.state === 'running' ? 'running' : 'stopped' });
+      }
       if (['start', 'stop', 'purge'].includes(action) && req.method === 'POST' && !match[3]) {
         const input = action === 'start' ? await body(req) : {};
         if (action === 'start' && requireLease) renew(id, input); else req.resume();

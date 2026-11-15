@@ -2,6 +2,14 @@
 
 记录自 2026-11-11 起。功能及资源变更验证均使用临时目录、随机合成账户/令牌、隔离 DoneBot fixture 或测试私有 PostgreSQL。用户明确提供的测试账号仅用于线上登录及只读身份接口核对，没有变更实际余额、用户应用或已有实例；凭据和令牌未落盘。
 
+## 2026-11-15：运行服务退出自动恢复（尚未发布部署）
+
+`npm test` 共 37 项通过。新增测试使用真实 worker/agent、回环合成主控及临时 Unix socket 运行服务：意外退出在有效租约下恢复；再次短期退出进入 5 秒退避；退避到期恢复代理；主动停机撤销后不再拉起。备份暂停期间多次续租不记录崩溃、不额外获取启动凭据；备份完成后代理恢复。既有断网租约、授权到期、401/403 撤销、启动失败、agent 退出及数据保留测试通过。
+
+agent 续租会读取运行时实际状态，串行维护期间返回 busy；worker 保留维护状态，意外退出才触发恢复和有界退避。Docker 的 restart=no 保留，节点进程的 systemd 监督沿用现有配置。这些测试未运行真实 Docker、Linux systemd 或生产实例；不代表已部署或实际 Cloud 已恢复。旧的真实 Linux 验证结果不扩大到本次新增退出检查。
+
+DoneBot 同步增加最小 HTTP 响应中断防护、桌面自动续连及内容缓存；配套检查见相邻仓库 `docs/verification/donebot-cloud-reconnect.md`。节点恢复逻辑需更新 agent/worker；HTTP 崩溃防护需另发新服务镜像。下述已发布镜像记录仍属于之前的发布，不包含本节源码。
+
 ## 2026-11-15：Cloud 双镜像发布及手机状态
 
 [run 43687113265](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43687113265) 成功：DoneBot 固定源码 `75704dddf140e27aa319de0c0baef7d54d366ebf`，Cloud 验证代码 `22ff903267f3555f8fbfc8d8202694b89fcc8721`，平台 `linux/amd64`。两镜像在一次性 Ubuntu runner 通过真实 Linux 双用户运行隔离、受控出网和图形桌面检查后推送 GHCR。匿名注册表清单与配置读取、摘要、平台及 revision 核对通过。

@@ -9,7 +9,7 @@ Docker、受控出口、存储/备份、浏览器、故障恢复与 systemd 生�
 3. 在独立的“Cloud 管理”导航选择“套餐与保留”，设置月费和保留天数（默认 7），先保持套餐关闭；节点和隔离预发布验收完成后再启用。金额单位沿用账户余额，非新增货币单位。
 4. 每台服务器登记名称、私网 HTTPS origin、实例名额。保存一次性显示的独立节点 token、node ID，以及主控公钥。主控公钥在节点区持续显示，添加和轮换令牌响应也直接附带公钥，填入节点 `worker.env` 的 `CLOUD_MASTER_PUBLIC_KEY`。后台可轮换或撤销节点令牌；旧令牌立即失效，轮换所得新令牌仅显示一次，写入该节点配置后重启 worker。撤销同时暂停新分配，已有实例会在租约失效后停机，数据仍留原节点。
 5. PostgreSQL 仅由网关访问。节点经 VPN/虚拟网访问主控 API，主控经私网 HTTPS 访问节点；不开放公网数据库，不给节点管理员 JWT 或数据库密码。
-6. 浏览器入口配置 `DONEBOT_CLOUD_MASTER_ORIGIN=https://donebot.cn`、`DONEBOT_CLOUD_BROWSER_ORIGIN=https://cloud.donebot.cn`。将 `*.cloud.donebot.cn` 的 DNS/TLS 指向主控，代理保留实例 Host、原路径、Origin 和 WebSocket 升级，并允许 SSE 长连接；禁止缓存。不要把实例域名直接指向 worker。详细配置及会话限制见 [浏览器接入](browser-access.md)。不配置 browser origin 时保持禁用，配置错误则主控启动失败。
+6. 浏览器入口配置 `DONEBOT_CLOUD_MASTER_ORIGIN=https://donebot.cn`、`DONEBOT_CLOUD_BROWSER_ORIGIN=https://cloud.donebot.cn`。将 `*.cloud.donebot.cn` 的 DNS/TLS 指向主控，代理保留实例 Host、原路径、Origin 和 WebSocket 升级，并允许 SSE 长连接；前置代理禁止共享缓存，保留网关下发的浏览器私有缓存头。不要把实例域名直接指向 worker。详细配置及会话限制见 [浏览器接入](browser-access.md)。不配置 browser origin 时保持禁用，配置错误则主控启动失败。
 
 主控必须能校验节点 HTTPS 证书。节点反向代理只允许主控私网来源，启用 WebSocket 升级。TLS 终止代理需保留外部 `Host` 并准确设置 `X-Forwarded-Proto: https`；agent 的 `CLOUD_PUBLIC_ORIGIN` 与 worker 的 `CLOUD_MASTER_ORIGIN` 均配置为外部主控 origin，例如 `https://donebot.cn`。
 
@@ -100,6 +100,8 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 #### 已发布的 amd64 镜像
 
 当前推荐为 2026-11-15 的[成功发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43687113265)，包含手机连接器、媒体/附件、群聊、自动化开关及桌面端图片输入修复。[发布与注册表核验记录](verification/images-2026-11-15-amd64.json)保留源码、不可变摘要与真实 Linux 验证结果。2026-11-13、2026-11-14 的文件只保留作历史核对，不是本次升级目标。
+
+该已发布版本不包含后续 HTTP 响应中断修复及客户端续连/缓存改动。自动重启另属于节点 agent/worker 代码。后续发布须提供新的真实服务镜像摘要和节点源码版本；不要把当前清单视为这些修复已经上线。
 
 DoneBot 源码固定为 `75704dddf140e27aa319de0c0baef7d54d366ebf`，Cloud 验证代码为 `22ff903267f3555f8fbfc8d8202694b89fcc8721`。两镜像已通过真实双用户服务、受控出网及专属桌面验证，并核对公开注册表清单和配置；平台为 `linux/amd64`，不要用于 ARM64 节点。
 
@@ -241,6 +243,20 @@ sudo node --env-file=/etc/donebot-cloud/agent.env /实际Cloud工程目录/scrip
 - 删除前需领取当前代次命令并确认保留期；确认后锁定续费，避免删数据同时扣款。删除失败保持 error，15 秒后可重试，成功才释放名额并允许重新开通。
 - worker 重启先停止其本地 manifest 记录的实例，取得新租约后恢复。agent 启动先检查并停止本部署已有容器；正常退出停止已知实例，systemd ExecStopPost 再执行定向 fence，覆盖强制终止。agent 会拒绝接管不同部署标签的资源；其状态目录、deployment ID、加密 key 和 Docker 资源不能任意重建或互换。
 - 异常重启可清理由当前 UID 拥有、确认无监听者且 inode 未变化的旧 agent socket；不会停止其他进程。worker/agent 应交给服务管理器监督，当前无宿主机级独立硬件看门狗。
+
+### 运行服务意外退出后的自动恢复
+
+worker 每次成功续租时通过 agent 检查容器实际运行状态，避免只根据内存中的“已启动”记录判断。有效运行租约下，首次意外退出在下一轮检查发现后尝试恢复；默认轮询间隔 3 秒，实际恢复还需主控请求及容器启动时间。连续运行不足 60 秒又退出时，重试等待依次为 5、10、20、40、80、160、300 秒，之后最多每 300 秒尝试一次；启动本身失败沿用 15 秒起、上限 300 秒的退避。健康运行满 60 秒或授权代次改变后清除连续崩溃计数。
+
+恢复复用已有容器、数据盘、网络、资源规格及安装身份，不迁移任务、不重放中断的消息或工具操作。备份/恢复等 agent 串行维护中的停机不计为崩溃。主动停机、授权撤销及租约失效后不自动拉起。主控不可达时不领取新启动凭据，恢复需等主控通信成功且授权有效。
+
+Docker 仍保持 `restart=no`，避免 Docker daemon 重启时绕过租约直接启动。节点 agent/worker 自身沿用 systemd `Restart=on-failure`、`RestartSec=3`；这是节点进程恢复，与用户运行容器的恢复分开。日志 `instance_exited` 包含尝试次数及 `restart_in_ms`，后续以 `instance_started` 或 `instance_start_failed` 核对结果。
+
+启用此修复需更新节点 agent/worker 源码。在维护窗口先停止 worker、agent，按现有部署方式更新代码并保留完整状态目录及配置，再依次启动 agent、worker。节点生命周期会短暂停止实例，随后按有效租约恢复。单独部署网关或更换用户运行镜像不会安装这段节点恢复逻辑。
+
+本次 HTTP 崩溃防护还需要发布并升级 DoneBot 服务镜像；在 GitHub 发布新摘要后，沿用下文保留数据的镜像升级步骤。桌面连接自动续连需要新版桌面客户端；静态资源私有缓存需要新版网关。图形桌面镜像、手机 App 和手机中继不因本次修复而必须更新。
+
+验证仅在一次性 fixture 上停止明确属于测试的运行服务；禁止通过杀死生产用户容器验收恢复机制。查看只读日志、实际容器状态和健康接口可核对生产恢复，不用反复手动启动替代自动恢复。
 
 ### 删除服务器登记
 

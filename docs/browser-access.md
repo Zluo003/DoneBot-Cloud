@@ -11,11 +11,11 @@ DONEBOT_CLOUD_MASTER_ORIGIN=https://donebot.cn
 DONEBOT_CLOUD_BROWSER_ORIGIN=https://cloud.donebot.cn
 ```
 
-需要 `*.cloud.donebot.cn` 的通配 DNS 和 TLS，所有实例域名均到达主控。每实例地址为 `https://<instance UUID>.cloud.donebot.cn/`，原生网页的 `/assets`、`/api`、SSE 和 WebSocket 路径不改写。前置代理必须保留 Host 和 Origin，准确处理可信客户端 IP/UA，并允许 WebSocket、流式响应与足够长的读取超时；这些响应不得缓存。worker 仅从主控私网接收签名访问，agent 仍只监听本机 Unix socket。
+需要 `*.cloud.donebot.cn` 的通配 DNS 和 TLS，所有实例域名均到达主控。每实例地址为 `https://<instance UUID>.cloud.donebot.cn/`，原生网页的 `/assets`、`/api`、SSE 和 WebSocket 路径不改写。前置代理必须保留 Host 和 Origin，准确处理可信客户端 IP/UA，并允许 WebSocket、流式响应与足够长的读取超时。禁止前置代理共享缓存，保留主控给浏览器的 Cache-Control；worker 仅从主控私网接收签名访问，agent 仍只监听本机 Unix socket。
 
 browser namespace 在主站 CORS、静态资源和 API 路由之前拦截，错误实例、大小写、尾点、嵌套域名和错误端口不会回落到网关页面。master origin 必须位于 namespace 之外。生产只接受 HTTPS；`cloud.localhost` 的 HTTP 例外需显式测试开关，仅供一次性 fixture。
 
-不同实例 origin 隔离 localStorage、Cookie 和网页访问。响应设置单值 Origin-Agent-Cluster、COOP/CORP、禁止 framing、no-referrer 和 no-store。Cookie 无 Domain，因此主站或另一实例的 Cookie 不授予本实例访问权限；任何用户容器都不能接收网关主站 Cookie。
+不同实例 origin 隔离 localStorage、Cookie 和网页访问。响应设置单值 Origin-Agent-Cluster、COOP/CORP、禁止 framing 和 no-referrer。HTML、API、附件、错误及带查询参数的响应为 no-store；只有成功 GET 的 `/assets/名称-版本hash.js`、`.css`、`.woff2` 允许浏览器 `private, max-age=31536000, immutable` 缓存。原始请求仍先通过主控验证，已缓存资源仅包含应用代码/字体，不提供用户数据访问权。Cookie 无 Domain，因此主站或另一实例的 Cookie 不授予本实例访问权限；任何用户容器都不能接收网关主站 Cookie。
 
 ## 打开与撤销
 
@@ -38,6 +38,8 @@ Chrome 使用合成控制页打开实例；网关用户控制台通过组件、�
 ## DoneBot 原生客户端
 
 用户控制台“在 DoneBot 客户端打开”请求 `POST /api/v1/donebot/cloud/instances/:id/desktop-launch`。返回的 `donebot://pair` 链接复用客户端现有连接协议，包含该实例地址和 60 秒一次性码。客户端探测 `/.well-known/donebot/environment` 后打开 `/pair`，fragment 码经同 Origin `/api/auth/pair` 兑换 HttpOnly Cookie，再加载实例。主控截获这些路径，原版服务不接收 Cloud 配对码。环境探测仅给固定 label、实例 UUID 和协议版本，不提供用户数据或实例是否存在的查询。
+
+新版 DoneBot 内部的自有 Cloud 切换入口会复用已有 Cookie；失效后通过本机账号自动请求同一实例的新连接码，并在 Electron Cookie 容器兑换，无需重复通用配对确认。外部 `donebot://pair` 链接和第三方服务器仍走原有确认流程。成功授权后按实例和身份读取本窗口的短期内容缓存，再后台同步在线快照；不使用缓存执行或重放待发操作。手机和电脑可同时连接同一 Cloud，桌面续连不撤销手机安装或会话。
 
 原生兑换与网页兑换使用不同 binding，不能互换。原生开门码绑定客户端 IP，允许浏览器到 Electron 的 UA 改变；兑换后的会话绑定实际 IP+UA，只能使用一次，同样受 JWT/订阅/撤销约束。网络出口改变、主控 JWT 到期或会话撤销后应重新打开。
 

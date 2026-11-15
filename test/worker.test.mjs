@@ -44,11 +44,11 @@ async function credentialFixture(t, { leaseMs = 19000, credentialFailure = true 
   const worker = await createWorker({ masterOrigin: origin, nodeId: node, nodeToken: 'synthetic-node-secret-'.repeat(3), publicKey: keys.publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64'), stateDir: join(dir, 'worker'), agentSocket, port: 0, development: true, runtimeCredentials: true, pollMs: 100000, log: entry => logs.push(entry) });
   t.after(async () => { t.mock.timers.reset(); await worker.close(); await agent.close(); await close(master); await rm(dir, { recursive: true, force: true }); });
   const until = async predicate => { for (let n = 0; n < 100; n++) { if (predicate()) return; await new Promise(resolve => setTimeout(resolve, 10)); } assert.fail('fixture did not settle'); };
-  const proxy = async () => {
-    const path = `/v1/instances/${id}/proxy/api/value`;
-    const payload = Buffer.from(JSON.stringify({ node_id: node, instance_id: id, request_hash: hash('GET\n' + path), expires: Math.floor(Date.now() / 1000) + 20 }));
+  const proxy = async (route = '/api/value', init = {}) => {
+    const path = `/v1/instances/${id}/proxy${route}`;
+    const payload = Buffer.from(JSON.stringify({ node_id: node, instance_id: id, request_hash: hash((init.method || 'GET') + '\n' + path), expires: Math.floor(Date.now() / 1000) + 20 }));
     const grant = payload.toString('base64url') + '.' + sign(null, payload, keys.privateKey).toString('base64url');
-    return fetch(worker.origin + path, { headers: { 'x-cloud-grant': grant, 'x-cloud-origin': origin } });
+    return fetch(worker.origin + path, { ...init, headers: { 'x-cloud-grant': grant, 'x-cloud-origin': origin, 'content-type': 'application/json' } });
   };
   return { worker, runtime, id, logs, reports, until, proxy, get credentials() { return credentials; },
     set masterMode(value) { masterMode = value; }, set failure(value) { failure = value; }, set reportFailure(value) { reportFailure = value; }, set authorized(value) { authorized = value; },
@@ -56,6 +56,57 @@ async function credentialFixture(t, { leaseMs = 19000, credentialFailure = true 
     stop() { authorized = false; command = { id: randomUUID(), instance_id: id, generation: 2, action: 'stop', lease_token: 'synthetic-operation-secret' }; },
   };
 }
+
+test('a crashed runtime restarts under a live lease, backs off repeated exits and stays stopped after revocation', async t => {
+  const f = await credentialFixture(t, { credentialFailure: false });
+  await f.until(() => f.logs.some(e => e.event === 'operation_completed'));
+  await f.worker.poll();
+  const starts = () => f.logs.filter(e => e.event === 'instance_started').length;
+  const initial = starts();
+  await f.runtime.stop(f.id);
+  await f.worker.poll();
+  await f.until(() => starts() === initial + 1);
+  assert.equal((await f.proxy()).status, 200);
+  assert.equal(f.logs.find(e => e.event === 'instance_exited').restart_in_ms, 0);
+  await f.runtime.stop(f.id);
+  await f.worker.poll();
+  assert.equal(starts(), initial + 1);
+  assert.equal(f.logs.filter(e => e.event === 'instance_exited').at(-1).restart_in_ms, 5000);
+  for (let n = 0; n < 3; n++) await f.worker.poll();
+  assert.equal(starts(), initial + 1);
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() }); t.mock.timers.tick(5001);
+  await f.worker.poll(); await f.until(() => starts() === initial + 2);
+  assert.equal((await f.proxy()).status, 200);
+  f.stop(); await f.worker.poll();
+  await f.until(() => f.logs.some(e => e.event === 'operation_completed' && e.action === 'stop'));
+  t.mock.timers.tick(60000);
+  await f.worker.poll();
+  assert.equal((await f.runtime.status(f.id)).state, 'stopped');
+  assert.equal(starts(), initial + 2);
+});
+
+test('a backup pause does not count as a crash or trigger an extra recovery', async t => {
+  const f = await credentialFixture(t, { credentialFailure: false });
+  await f.until(() => f.logs.some(e => e.event === 'operation_completed'));
+  await f.worker.poll();
+  let release;
+  f.runtime.backups = { create: async () => {
+    await new Promise(resolve => { release = resolve; });
+    return { id: randomUUID(), state: 'ready' };
+  } };
+  const backup = f.proxy('/api/cloud/backups', { method: 'POST', body: JSON.stringify({ request_key: randomUUID(), confirm: true }) });
+  try {
+    await f.until(() => release);
+    assert.equal((await f.runtime.status(f.id)).state, 'stopped');
+    const credentials = f.credentials;
+    await f.worker.poll();
+    assert.equal(f.credentials, credentials);
+    assert.equal(f.logs.filter(e => e.event === 'instance_exited').length, 0);
+  } finally { release?.(); assert.equal((await backup).status, 200); }
+  await f.worker.poll();
+  assert.equal((await f.runtime.status(f.id)).state, 'running');
+  assert.equal((await f.proxy()).status, 200);
+});
 
 test('business 404 preserves safe diagnostics, prevents agent start and backs off before recovery', async t => {
   const f = await credentialFixture(t);

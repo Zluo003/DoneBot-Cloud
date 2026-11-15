@@ -2,13 +2,21 @@
 
 记录自 2026-11-11 起。功能及资源变更验证均使用临时目录、随机合成账户/令牌、隔离 DoneBot fixture 或测试私有 PostgreSQL。用户明确提供的测试账号仅用于线上登录及只读身份接口核对，没有变更实际余额、用户应用或已有实例；凭据和令牌未落盘。
 
-## 2026-11-15：运行服务退出自动恢复（尚未发布部署）
+## 2026-11-15：响应中断修复镜像与当前推荐入口
+
+[run 43704284577](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43704284577) 成功，固定 DoneBot `6c314340414e11006b62939a99c9967bc48f5b60`、Cloud `682308ad059f3d81d4334dd3b96586db7608930e`。真实 Linux 双用户、受控出网及专属桌面检查通过后发布 GHCR；匿名核对两镜像的注册表摘要、配置摘要、linux/amd64 平台及源码标签通过，见 [完整发布证据](verification/images-2026-11-15-recovery-amd64.json)。
+
+服务摘要为 `da47aaaf3e6a…`，桌面摘要为 `5d13bfa2c236…`。[当前推荐清单](https://github.com/Zluo003/DoneBot-Cloud/releases/download/cloud-images-amd64-current/registry-images.env) 与本地 [current-amd64.env](../deploy/images/current-amd64.env) 指向同一组正式摘要；后续清单自动更新的工作流改动仍由用户推送。本次没有删除旧镜像，也没有部署生产。
+
+DoneBot HTTP 中断、续连及缓存的 28 项 Vitest、45 项 Electron Node 测试、真实 Electron Cookie fixture、构建与隔离服务 smoke 通过。Cloud 37 项节点测试通过。真实 Linux 发布检查证明本次镜像的隔离和桌面流程；本轮新增崩溃退避逻辑由合成 runtime 测试覆盖，没有额外声称真实 Docker 崩溃/恢复或生产恢复已验收。
+
+## 2026-11-15：运行服务退出自动恢复（节点源码已推送，生产部署未核验）
 
 `npm test` 共 37 项通过。新增测试使用真实 worker/agent、回环合成主控及临时 Unix socket 运行服务：意外退出在有效租约下恢复；再次短期退出进入 5 秒退避；退避到期恢复代理；主动停机撤销后不再拉起。备份暂停期间多次续租不记录崩溃、不额外获取启动凭据；备份完成后代理恢复。既有断网租约、授权到期、401/403 撤销、启动失败、agent 退出及数据保留测试通过。
 
 agent 续租会读取运行时实际状态，串行维护期间返回 busy；worker 保留维护状态，意外退出才触发恢复和有界退避。Docker 的 restart=no 保留，节点进程的 systemd 监督沿用现有配置。这些测试未运行真实 Docker、Linux systemd 或生产实例；不代表已部署或实际 Cloud 已恢复。旧的真实 Linux 验证结果不扩大到本次新增退出检查。
 
-DoneBot 同步增加最小 HTTP 响应中断防护、桌面自动续连及内容缓存；配套检查见相邻仓库 `docs/verification/donebot-cloud-reconnect.md`。节点恢复逻辑需更新 agent/worker；HTTP 崩溃防护需另发新服务镜像。下述已发布镜像记录仍属于之前的发布，不包含本节源码。
+DoneBot 同步增加最小 HTTP 响应中断防护、桌面自动续连及内容缓存；配套检查见相邻仓库 `docs/verification/donebot-cloud-reconnect.md`。节点恢复逻辑需更新 agent/worker；HTTP 崩溃防护已包含在本次 `6c31434` 镜像发布中。节点源码已推送不等于生产部署。
 
 ## 2026-11-15：Cloud 双镜像发布及手机状态
 

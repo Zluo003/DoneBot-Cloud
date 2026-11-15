@@ -99,27 +99,44 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 
 #### 已发布的 amd64 镜像
 
-当前推荐为 2026-11-15 的[成功发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43687113265)，包含手机连接器、媒体/附件、群聊、自动化开关及桌面端图片输入修复。[发布与注册表核验记录](verification/images-2026-11-15-amd64.json)保留源码、不可变摘要与真实 Linux 验证结果。2026-11-13、2026-11-14 的文件只保留作历史核对，不是本次升级目标。
+当前推荐为 2026-11-15 响应中断修复后的[成功发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43704284577)，包含手机连接器、媒体/附件、群聊、自动化开关及桌面端图片输入修复。[发布与注册表核验记录](verification/images-2026-11-15-recovery-amd64.json)保留源码、不可变摘要与真实 Linux 验证结果。2026-11-13、2026-11-14 的文件只保留作历史核对，不是本次升级目标。
 
-该已发布版本不包含后续 HTTP 响应中断修复及客户端续连/缓存改动。自动重启另属于节点 agent/worker 代码。后续发布须提供新的真实服务镜像摘要和节点源码版本；不要把当前清单视为这些修复已经上线。
+该发布包含 HTTP 响应中断防护及 Cloud 页面缓存。桌面自动续连需更新客户端；意外退出自动恢复需另行更新节点 agent/worker 至 `682308ad059f3d81d4334dd3b96586db7608930e` 或后续版本，不能只换镜像。有效租约下按现有轮询恢复，连续退出使用 5、10、20 秒至 300 秒的有界退避；主动停机、撤销或租约失效不会拉起。Docker 保留 `restart=no`。
 
-DoneBot 源码固定为 `75704dddf140e27aa319de0c0baef7d54d366ebf`，Cloud 验证代码为 `22ff903267f3555f8fbfc8d8202694b89fcc8721`。两镜像已通过真实双用户服务、受控出网及专属桌面验证，并核对公开注册表清单和配置；平台为 `linux/amd64`，不要用于 ARM64 节点。
+DoneBot 源码固定为 `6c314340414e11006b62939a99c9967bc48f5b60`，Cloud 验证代码为 `682308ad059f3d81d4334dd3b96586db7608930e`。两镜像已通过真实双用户服务、受控出网及专属桌面验证，并核对公开注册表清单和配置；平台为 `linux/amd64`，不要用于 ARM64 节点。
 
-默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-15-amd64.env](../deploy/images/2026-11-15-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
+默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-15-recovery-amd64.env](../deploy/images/2026-11-15-recovery-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
 
 ```dotenv
-CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:ad2a1b3a2461cfe95e99926d190025f9d1a63f7b1dd7459add8fc597df1ccd36
-CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:90c7989406282e62636ccc5875003acb74e5c058d3a70087eb5d1025b07a70fa
+CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:da47aaaf3e6a67b9e0a00714fc166cc1e6d16b8815e14d8a1f49bc9f7e5eadca
+CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:5d13bfa2c236850e9739d9a77a3ffe68482e6b3e0f047f623a413b7bbbda48c6
 ```
 
 在 amd64 节点直接在线拉取，无需上传离线包或在节点编译 DoneBot：
 
 ```sh
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:ad2a1b3a2461cfe95e99926d190025f9d1a63f7b1dd7459add8fc597df1ccd36
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:90c7989406282e62636ccc5875003acb74e5c058d3a70087eb5d1025b07a70fa
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:da47aaaf3e6a67b9e0a00714fc166cc1e6d16b8815e14d8a1f49bc9f7e5eadca
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:5d13bfa2c236850e9739d9a77a3ffe68482e6b3e0f047f623a413b7bbbda48c6
 ```
 
 镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应包含上述 Cloud 验证提交及其兼容维护入口，已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费或目标节点状态。
+
+#### 始终读取当前推荐清单
+
+部署使用固定入口 [registry-images.env](https://github.com/Zluo003/DoneBot-Cloud/releases/download/cloud-images-amd64-current/registry-images.env)，取得同一次成功发布的服务与桌面不可变摘要；不要从历史文档或 GHCR 包列表猜测最新版本。本次清单已发布。
+
+```sh
+curl --fail --location --proto '=https' --tlsv1.2 \
+  https://github.com/Zluo003/DoneBot-Cloud/releases/download/cloud-images-amd64-current/registry-images.env \
+  --output /tmp/donebot-current-amd64.env
+cat /tmp/donebot-current-amd64.env
+```
+
+检查文件只有两个符合预期 GHCR 仓库的 `repository@sha256:` 值，将其作为本次维护目标；不要直接执行下载内容或覆盖完整 `agent.env`。清单更新不会自动替换已有容器，仍按受控升级流程执行。
+
+Cloud 工作流已在本地补充同平台串行发布和成功验证后刷新该入口；该工作流改动由用户推送后才对后续发布生效。发布失败不更新当前清单。
+
+旧镜像不在每次发布后立即删除。确认所有节点中运行、停止实例和保留的回滚版本都不再引用某摘要后，才清理对应注册表版本及节点缓存。只删除标签不能阻止按旧摘要拉取；删掉仍被引用的摘要则会妨碍重建和回滚。不要执行不区分归属的批量镜像清理。日常部署仅认当前清单，历史清单继续用于审计。
 
 #### 自行构建与离线包
 
@@ -294,9 +311,9 @@ Docker 仍保持 `restart=no`，避免 Docker daemon 重启时绕过租约直接
 
 | 核对项 | 旧发布 | 本次发布 |
 | --- | --- | --- |
-| 服务摘要开头 | `dcdf30747950` | `ad2a1b3a2461` |
-| 同次桌面摘要开头 | `13ffc989e7c2` | `90c798940628` |
-| DoneBot 源码 revision | `9455c9f` | `75704dd` |
+| 服务摘要开头 | `ad2a1b3a2461` | `da47aaaf3e6a6` |
+| 同次桌面摘要开头 | `90c798940628` | `5d13bfa2c236` |
+| DoneBot 源码 revision | `75704dd` | `6c31434` |
 
 先根据实例 UUID、agent 的 deployment ID 和 `cn.donebot.cloud.*` 标签确认本节点的运行及桌面容器。对明确归属的运行容器执行只读检查，将 `SERVICE_CONTAINER_NAME` 换成其完整名称：
 
@@ -335,11 +352,11 @@ sudo systemctl start donebot-cloud-agent
 sudo systemctl start donebot-cloud-worker
 ```
 
-运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `75704dddf140e27aa319de0c0baef7d54d366ebf`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
+运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `6c314340414e11006b62939a99c9967bc48f5b60`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
 
 ### 手机中的 Cloud 显示离线
 
-手机在线状态来自 Cloud 向手机中枢上报的中继连接心跳，不等同于管理后台实例“运行中”。运行服务为旧 `9455c9f` 时没有手机连接器；当前正式服务镜像已在隔离容器内验证手机状态接口返回 200。
+手机在线状态来自 Cloud 向手机中枢上报的中继连接心跳，不等同于管理后台实例“运行中”。运行服务为旧 `9455c9f` 时没有手机连接器；新镜像已通过真实 Linux 运行及桌面验证；此前 `75704dd` 镜像的独立无网络手机状态探测返回 200，不能用历史探测代替本次生产验收。
 
 在明确归属的运行容器内执行两次只读请求，间隔 10 秒，不通过公网代理：
 

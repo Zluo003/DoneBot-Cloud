@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cloud-images-${{ inputs.donebot_revision }}-${{ inputs.platform }}
+  group: cloud-images-${{ inputs.platform }}
   cancel-in-progress: false
 
 jobs:
@@ -29,7 +29,7 @@ jobs:
     runs-on: ${{ inputs.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     permissions:
-      contents: read
+      contents: write
       packages: write
     env:
       DONEBOT_REVISION: ${{ inputs.donebot_revision }}
@@ -119,3 +119,28 @@ jobs:
             ${{ env.BUNDLE }}/*-verification.jsonl
           if-no-files-found: error
           retention-days: 14
+      - name: Update current deployment manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          arch="${IMAGE_PLATFORM#linux/}"
+          release="cloud-images-$arch-current"
+          notes="$RUNNER_TEMP/cloud-images-notes.md"
+          {
+            echo "Current verified Cloud images for $IMAGE_PLATFORM."
+            echo
+            echo "DoneBot source: $DONEBOT_REVISION"
+            echo "Cloud verification source: $GITHUB_SHA"
+            echo "Build: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo 'Download registry-images.env for the current immutable image digests.'
+            echo 'Upgrade existing containers through the documented maintenance procedure; preserve their data.'
+          } > "$notes"
+          if gh release view "$release" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$release" --repo "$GITHUB_REPOSITORY" --title "Current Cloud images ($IMAGE_PLATFORM)" --notes-file "$notes" --prerelease --latest=false
+          else
+            gh release create "$release" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Current Cloud images ($IMAGE_PLATFORM)" --notes-file "$notes" --prerelease --latest=false
+          fi
+          gh release upload "$release" "$BUNDLE/published-manifest.json" --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$release" "$BUNDLE/registry-images.env" --repo "$GITHUB_REPOSITORY" --clobber

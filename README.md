@@ -64,7 +64,7 @@ DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU 
 
 完整命令、持久配置、旧 unit 兼容步骤及节点环境文件见 [部署说明](docs/deployment.md)，回退边界见 [发布说明](docs/release-runbook.md)。网关在线更新只更新网关程序；Cloud 节点代码及 DoneBot/桌面镜像按节点升级流程单独发布。
 
-Cloud 节点默认从 GHCR 在线拉取已发布的两类镜像。当前推荐为 2026-11-15 的 [x64 双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43687113265)，DoneBot 源码 `75704dddf140e27aa319de0c0baef7d54d366ebf`，包含手机连接、媒体和自动化适配。默认配置入口为 [current-amd64.env](deploy/images/current-amd64.env)，本次不可变清单为 [2026-11-15-amd64.env](deploy/images/2026-11-15-amd64.env)；直接拉取命令见 [已发布镜像](docs/deployment.md#已发布的-amd64-镜像)。历史 11 月 13/14 日镜像保留用于核对，不作为本次升级目标。
+Cloud 节点默认从 GHCR 在线拉取已发布的两类镜像。当前推荐为 2026-11-15 的 [x64 双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43704284577)，DoneBot 源码 `6c314340414e11006b62939a99c9967bc48f5b60`，包含 HTTP 响应中断防护、Cloud 页面缓存及此前的手机、媒体和自动化适配。节点退出恢复还需更新 agent/worker 至 `682308ad059f3d81d4334dd3b96586db7608930e` 或后续版本。默认配置入口为 [current-amd64.env](deploy/images/current-amd64.env)，本次不可变清单为 [2026-11-15-recovery-amd64.env](deploy/images/2026-11-15-recovery-amd64.env)；直接拉取命令见 [已发布镜像](docs/deployment.md#已发布的-amd64-镜像)。历史 11 月 13/14 日镜像保留用于核对，不作为本次升级目标。
 
 更新已有节点时按 [节点镜像滚动升级](docs/deployment.md#节点镜像滚动升级) 操作：先备份并使用旧配置停止 worker、agent，再修改镜像值，对每个实例执行受控升级准备，最后恢复服务。镜像已拉取、`agent.env` 已修改、实例“运行中”都不能证明容器已升级；必须核对实际容器的 `Config.Image`、源码 revision，以及手机状态接口。
 

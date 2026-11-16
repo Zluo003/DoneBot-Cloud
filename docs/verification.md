@@ -1,5 +1,11 @@
 # 隔离验证记录
 
+## 2026-11-17：已交付附件复用镜像
+
+[run 43938501354](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43938501354) 第 3 次执行成功，固定 DoneBot `837b7f3db66e9263aeb5a5212729d179daae5878`、Cloud `62be34b49165daa4b90196e20caefc5072969bc6`。普通 Bot、协调 Bot 和群聊的已交付图片、视频、音频及文档直接汇报；再次附加时复用已有文件，不重复复制，也不因这次操作触发“部分完成”。真实 Linux 双租户、受控出网和图形桌面检查通过后发布 GHCR；匿名摘要、平台、源码标签及已发布服务镜像的隔离启动检查通过，见[发布证据](verification/images-2026-11-17-attachments-amd64.json)。
+
+当前推荐清单已更新。停用的是 Cloud 聊天网页和静态前端，Bot 使用的按需图形桌面仍保留，当前发布流程会一起验证配套桌面镜像。本次没有升级生产实例；已有节点需按维护流程升级并保留数据。前两次任务因私有仓库的 GitHub 账单限制没有启动，仓库公开后第 3 次执行完成。
+
 ## 2026-11-16：API 专用 Cloud、附件整理与 Muse 10 秒
 
 [run 43751282354](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43751282354) 成功，固定 DoneBot `cf396bc1a526a908f0a302f8d51cd26151240271`、Cloud `dd79356cfd90c91b7a9f5d8fb160720a8ed80eba`。真实 Linux 双租户、受控出网和专属桌面检查通过后发布 GHCR，匿名核对两镜像的摘要、平台和源码标签通过，见[发布证据](verification/images-2026-11-16-api-amd64.json)。当前推荐清单已更新。

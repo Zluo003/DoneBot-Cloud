@@ -405,4 +405,4 @@ sudo /usr/bin/node --env-file=/etc/donebot-cloud/agent.env /opt/donebot-cloud/sr
 
 升级顺序为先安装 DoneBot 0.1.153 或后续兼容桌面客户端，再部署已发布的 `cloud-service` 服务镜像。旧桌面依赖云端静态页面，不能先切成 API 专用镜像。不要向已有 `server` 镜像仅删除目录来模拟升级。本次新摘要包含 Muse 的 4–10 秒能力登记（默认 6 秒）、PNG/JPEG 预处理和附件预算整理；11 月 15 日及更早的历史摘要不包含本次改动。
 
-本次服务和桌面镜像均从 DoneBot `cf7f37aecbb859016385180b3c160e17fe2da393` 重建，Cloud 构建和验证提交为 `6512e06d0a20e0eece0beee3f83287056f72d186`。两者均已匿名核对注册表摘要、linux/amd64 平台和 revision，详见[发布证据](verification/images-2026-11-17-resume-amd64.json)。沿用既有保留数据的受控实例升级流程。不得改写发布记录或使用未经发布验证的本地测试 image ID。此次拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。
+当前推荐的服务和配套桌面镜像均从 DoneBot `837b7f3db66e9263aeb5a5212729d179daae5878` 构建，Cloud 构建和验证提交为 `62be34b49165daa4b90196e20caefc5072969bc6`。包含已交付附件直接汇报和再次附加时复用原文件的修复。两者均已匿名核对注册表摘要、linux/amd64 平台和 revision，详见[发布证据](verification/images-2026-11-17-attachments-amd64.json)。沿用既有保留数据的受控实例升级流程；此次仅发布镜像，没有升级生产实例。此前的[手机续传镜像记录](verification/images-2026-11-17-resume-amd64.json)保留供回退。不得改写历史发布记录或使用未经发布验证的本地测试 image ID。API 拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。

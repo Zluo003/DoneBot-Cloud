@@ -4,7 +4,7 @@
 
 ## 已有节点的镜像更新
 
-当前推荐为 2026-11-16 发布的 `linux/amd64` API 专用双镜像，DoneBot 源码 `cf396bc1a526a908f0a302f8d51cd26151240271`；默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-16-api-amd64.env](../deploy/images/2026-11-16-api-amd64.env)，原始证据见 [发布记录](verification/images-2026-11-16-api-amd64.json)。正式平台发布经真实 Linux 验证后推送 GHCR，节点直接在线拉取。
+当前推荐为 2026-11-17 发布的 `linux/amd64` API 专用双镜像，DoneBot 源码 `cf7f37aecbb859016385180b3c160e17fe2da393`；默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-17-resume-amd64.env](../deploy/images/2026-11-17-resume-amd64.env)，原始证据见 [发布记录](verification/images-2026-11-17-resume-amd64.json)。正式平台发布经真实 Linux 验证后推送 GHCR，节点直接在线拉取。
 
 已有付费实例按[节点镜像滚动升级](deployment.md#节点镜像滚动升级)维护，不重复执行下述首次发布的开通或数据库初始化步骤：
 

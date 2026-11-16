@@ -1,0 +1,165 @@
+{
+  "date": "2026-11-17",
+  "workflow": "https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43927364247",
+  "conclusion": "success",
+  "manifest": {
+    "source_revision": "cf7f37aecbb859016385180b3c160e17fe2da393",
+    "platform": "linux/amd64",
+    "output": "/home/runner/work/_temp/donebot-images",
+    "docker_context": "current",
+    "archive": false,
+    "images": {
+      "service": {
+        "id": "sha256:514f5403203f1e5f707aea78d84b35f9ceee0b5604c4a51ac47f1dac8e304268",
+        "platform": "linux/amd64",
+        "revision": "cf7f37aecbb859016385180b3c160e17fe2da393"
+      },
+      "desktop": {
+        "id": "sha256:216083e4c902980c8009f85aa2dc832522fa672d734e46dd390e270102034d31",
+        "platform": "linux/amd64",
+        "revision": "cf7f37aecbb859016385180b3c160e17fe2da393"
+      }
+    },
+    "cloud_revision": "6512e06d0a20e0eece0beee3f83287056f72d186",
+    "registry": {
+      "service": "ghcr.io/zluo003/donebot-cloud-service@sha256:66df94f6261f737b7bc3863c929c80ca1d8188826a05bb3cbe4520961c6513a6",
+      "desktop": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:36899535b6ebc25eed7b9e90303e164d01a6b7392c24a181949aeb215a9d3234"
+    }
+  },
+  "registryVerification": {
+    "service": {
+      "ref": "ghcr.io/zluo003/donebot-cloud-service@sha256:66df94f6261f737b7bc3863c929c80ca1d8188826a05bb3cbe4520961c6513a6",
+      "manifestDigest": "sha256:66df94f6261f737b7bc3863c929c80ca1d8188826a05bb3cbe4520961c6513a6",
+      "configDigest": "sha256:514f5403203f1e5f707aea78d84b35f9ceee0b5604c4a51ac47f1dac8e304268",
+      "platform": "linux/amd64",
+      "revision": "cf7f37aecbb859016385180b3c160e17fe2da393",
+      "anonymousPullVerified": true
+    },
+    "desktop": {
+      "ref": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:36899535b6ebc25eed7b9e90303e164d01a6b7392c24a181949aeb215a9d3234",
+      "manifestDigest": "sha256:36899535b6ebc25eed7b9e90303e164d01a6b7392c24a181949aeb215a9d3234",
+      "configDigest": "sha256:216083e4c902980c8009f85aa2dc832522fa672d734e46dd390e270102034d31",
+      "platform": "linux/amd64",
+      "revision": "cf7f37aecbb859016385180b3c160e17fe2da393",
+      "anonymousPullVerified": true
+    }
+  },
+  "registryCheckedAt": "2026-11-16T18:25:26.024960+00:00",
+  "productionDeployed": false,
+  "linuxVerification": {
+    "linux": {
+      "result": "linux_fixture_passed",
+      "platform": "linux",
+      "arch": "x64",
+      "kernel": "7.0.0-1017-azure",
+      "node": "v24.18.0",
+      "dockerServer": "28.0.4",
+      "image": "sha256:514f5403203f1e5f707aea78d84b35f9ceee0b5604c4a51ac47f1dac8e304268",
+      "users": 2,
+      "separateNetworkNamespaces": true,
+      "crossVolumeDenied": true,
+      "dockerSocketAbsent": true,
+      "controlSecretsAbsent": true,
+      "networkDenied": true,
+      "persistence": true,
+      "scopedPurge": true,
+      "publicInternetEgress": false
+    },
+    "egress": {
+      "result": "controlled_egress_fixture_passed",
+      "kernel": "7.0.0-1017-azure",
+      "node": "v24.18.0",
+      "docker": "28.0.4",
+      "nft": "nftables v1.0.9 (Old Doc Yak #3)",
+      "image": "sha256:514f5403203f1e5f707aea78d84b35f9ceee0b5604c4a51ac47f1dac8e304268",
+      "users": 2,
+      "publicHTTP": true,
+      "publicHTTPSAndDNS": true,
+      "gatewayAnonymous401": true,
+      "tenantNetworkDenied": true,
+      "hostPrivateAndPublicDenied": true,
+      "metadataDenied": true,
+      "customPublicRangeDenied": true,
+      "unapprovedTCPAndUDPDenied": true,
+      "IPv6Denied": true,
+      "mappedIPv4AndRebindingDenied": true,
+      "unsolicitedInboundDenied": true,
+      "firewallUnavailableBlocksCreation": true,
+      "foreignFirewallTablePreserved": true,
+      "failedAtomicUpdateRetainsPolicy": true,
+      "explicitCohostGatewayHTTPS": true,
+      "cohostOtherPortsAndHostAddressesDenied": true,
+      "cohostCrossTenantDenied": true,
+      "gatewayExceptionRemovalRestoresDeny": true,
+      "agentRecreation": true,
+      "scopedNetworkRemoval": true
+    },
+    "desktop": {
+      "result": "linux_desktop_fixture_passed",
+      "image": "sha256:514f5403203f1e5f707aea78d84b35f9ceee0b5604c4a51ac47f1dac8e304268",
+      "desktopImage": "sha256:216083e4c902980c8009f85aa2dc832522fa672d734e46dd390e270102034d31",
+      "users": 2,
+      "actualDesktopContainers": true,
+      "nativeDoneBotStatus": true,
+      "nativeCUAFrame": true,
+      "originalMCPBridge": true,
+      "boundedFileDownload": true,
+      "executionUID1000": true,
+      "otherSocketAndVolumeDenied": true,
+      "crossDesktopNetworkDenied": true,
+      "stopStartPersistence": true,
+      "rawViewerWebSocket": true,
+      "viewerExcludesDesktopExec": true,
+      "persistedDiskQuotaAndRestoreAfterDefaultIncrease": true,
+      "nativeViewerWebSocket": true,
+      "runtimeLeaseExpiryStopsAndDisconnectsDesktop": true,
+      "subscriptionStopDisconnectsViewer": true,
+      "stoppedRuntimeRefusesDesktopAccess": true,
+      "combinedEncryptedBackups": true,
+      "corruptionRejectsBeforeEitherOverwrite": true,
+      "idempotentTwoDiskRestore": true,
+      "interruptedTwoDiskRestoreRecovered": true,
+      "explicitDesktopUpgradeRetainsHome": true,
+      "idleStop": true,
+      "purgeRemovesDesktopData": true
+    }
+  },
+  "limitations": [
+    "仅发布镜像并更新推荐清单，未升级生产实例。",
+    "手机断点续传需要同时安装包含 d68d78d 修复的手机 App。",
+    "未执行真实账号、收费模型、APNs 或公网长期稳定性验收。"
+  ],
+  "apiImageContract": {
+    "image": "ghcr.io/zluo003/donebot-cloud-service@sha256:66df94f6261f737b7bc3863c929c80ca1d8188826a05bb3cbe4520961c6513a6",
+    "isolated": true,
+    "network": "none",
+    "readOnlyRoot": true,
+    "user": "1001:1001",
+    "temporaryData": true,
+    "health": {
+      "app": "donebot",
+      "pid": 26,
+      "static": false,
+      "capabilities": {
+        "guardedMessages": 1,
+        "guardedRequests": 1,
+        "guardedFullAccess": 1,
+        "guardedOnBehalfOf": 1
+      },
+      "box": "off"
+    },
+    "mobileStatus": {
+      "authenticated": false,
+      "registered": false,
+      "relay": "off",
+      "node": null,
+      "problem": "",
+      "lastHeartbeat": null
+    },
+    "rootStatus": 404,
+    "frontendAbsent": true,
+    "versionedRangesPresent": true,
+    "handoffDeliveryPresent": true,
+    "productionDeployed": false
+  }
+}

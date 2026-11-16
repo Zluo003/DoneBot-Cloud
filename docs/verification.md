@@ -377,3 +377,11 @@ Cloud 28 项单元测试和 DoneBot 59 项针对性测试通过，类型、lint�
 - Playwright 使用独立本机 Vite 页面和合成 Axios 数据检查实际 AppSidebar 及六页面切换，运行策略显示默认 30 分钟，未发起生产请求。截图保存在网关本地 `output/playwright/cloud-runtime-policy.png`；临时页面、开发服务和浏览器会话已清理。
 
 本轮没有重做真实 Docker 桌面隔离验证；Docker 资源执行逻辑保持原实现。新长租约仍需在维护窗口同步发布到主控、worker、agent 才对生产生效，具体顺序和失联撤销延迟见部署说明。
+
+## 2026-11-17：附件交付与手机续传镜像
+
+[Cloud images run 43927364247](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43927364247) 成功，固定 DoneBot `cf7f37aecbb859016385180b3c160e17fe2da393`、Cloud `6512e06d0a20e0eece0beee3f83287056f72d186`，发布 linux/amd64 服务与桌面镜像。包含 Bot/群聊四类附件交付和手机分段下载的服务端 Range/If-Range/ETag 校验，保留 API 专用镜像行为。
+
+真实一次性 Ubuntu amd64、Docker 28.0.4、Node 24.18.0 的双租户隔离、受控出网及实际桌面检查通过后发布 GHCR。匿名核对两个 manifest/config 的 SHA-256、平台和 revision，并核对当前 Release 清单与构建 artifact 一致。另外拉取已发布服务镜像，以无网络、只读根、UID 1001 和临时数据运行，健康与手机状态接口 200、根路径 404、无静态前端，并核对打包服务含续传与附件交付代码。原始记录见 [images-2026-11-17-resume-amd64.json](verification/images-2026-11-17-resume-amd64.json)。当前推荐与固定清单已同步，旧发布记录保留。
+
+手机完整断点续传需同时安装手机端 d68d78d 或后续版本。镜像发布不会升级已有实例，也不会更新手机；本轮没有操作生产节点或用户数据，已有节点按部署文档保留数据受控升级。

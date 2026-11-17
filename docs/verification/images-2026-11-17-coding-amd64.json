@@ -1,0 +1,186 @@
+{
+  "date": "2026-11-17",
+  "workflow": "https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44026237249",
+  "attempt": 1,
+  "conclusion": "success",
+  "manifest": {
+    "source_revision": "1339d9acae44311b29e1dc9f196a6591ad571adc",
+    "platform": "linux/amd64",
+    "output": "/home/runner/work/_temp/donebot-images",
+    "docker_context": "current",
+    "archive": false,
+    "images": {
+      "service": {
+        "id": "sha256:7bcdc2c8a71238b254c165be5f751eed8fa1e9aa1d233c4ff755cdb226563c6f",
+        "platform": "linux/amd64",
+        "revision": "1339d9acae44311b29e1dc9f196a6591ad571adc"
+      },
+      "desktop": {
+        "id": "sha256:fc421ba35bc4004c385ee0e917e88e26eefcb8ad95ff76dfff242e3bd233d671",
+        "platform": "linux/amd64",
+        "revision": "1339d9acae44311b29e1dc9f196a6591ad571adc"
+      }
+    },
+    "cloud_revision": "e8fcf21559d6e228fb884a7d055b0884336f507d",
+    "registry": {
+      "service": "ghcr.io/zluo003/donebot-cloud-service@sha256:ac18863b290327d0ee3316d0d4f9f202f04f56111659918b66448f3924213348",
+      "desktop": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:a852d4f05126f86147e519d10fc42cc48da2034cc6eb14c57b919372e5a6c1d5"
+    }
+  },
+  "registryVerification": [
+    {
+      "kind": "service",
+      "reference": "ghcr.io/zluo003/donebot-cloud-service@sha256:ac18863b290327d0ee3316d0d4f9f202f04f56111659918b66448f3924213348",
+      "anonymousPullMetadata": true,
+      "registryDigestVerified": true,
+      "imageConfigDigest": "sha256:7bcdc2c8a71238b254c165be5f751eed8fa1e9aa1d233c4ff755cdb226563c6f",
+      "platform": "linux/amd64",
+      "sourceRevision": "1339d9acae44311b29e1dc9f196a6591ad571adc",
+      "layers": 13
+    },
+    {
+      "kind": "desktop",
+      "reference": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:a852d4f05126f86147e519d10fc42cc48da2034cc6eb14c57b919372e5a6c1d5",
+      "anonymousPullMetadata": true,
+      "registryDigestVerified": true,
+      "imageConfigDigest": "sha256:fc421ba35bc4004c385ee0e917e88e26eefcb8ad95ff76dfff242e3bd233d671",
+      "platform": "linux/amd64",
+      "sourceRevision": "1339d9acae44311b29e1dc9f196a6591ad571adc",
+      "layers": 20
+    }
+  ],
+  "registryCheckedAt": "2026-11-17T05:51:58.269065+00:00",
+  "currentReleaseMatchesWorkflow": true,
+  "linuxVerification": {
+    "linux": {
+      "result": "linux_fixture_passed",
+      "platform": "linux",
+      "arch": "x64",
+      "kernel": "7.0.0-1014-aws",
+      "node": "v24.18.0",
+      "dockerServer": "28.0.4",
+      "image": "sha256:7bcdc2c8a71238b254c165be5f751eed8fa1e9aa1d233c4ff755cdb226563c6f",
+      "users": 2,
+      "separateNetworkNamespaces": true,
+      "crossVolumeDenied": true,
+      "dockerSocketAbsent": true,
+      "controlSecretsAbsent": true,
+      "networkDenied": true,
+      "persistence": true,
+      "scopedPurge": true,
+      "publicInternetEgress": false
+    },
+    "egress": {
+      "result": "controlled_egress_fixture_passed",
+      "kernel": "7.0.0-1014-aws",
+      "node": "v24.18.0",
+      "docker": "28.0.4",
+      "nft": "nftables v1.0.9 (Old Doc Yak #3)",
+      "image": "sha256:7bcdc2c8a71238b254c165be5f751eed8fa1e9aa1d233c4ff755cdb226563c6f",
+      "users": 2,
+      "publicHTTP": true,
+      "publicHTTPSAndDNS": true,
+      "gatewayAnonymous401": true,
+      "tenantNetworkDenied": true,
+      "hostPrivateAndPublicDenied": true,
+      "metadataDenied": true,
+      "customPublicRangeDenied": true,
+      "unapprovedTCPAndUDPDenied": true,
+      "IPv6Denied": true,
+      "mappedIPv4AndRebindingDenied": true,
+      "unsolicitedInboundDenied": true,
+      "firewallUnavailableBlocksCreation": true,
+      "foreignFirewallTablePreserved": true,
+      "failedAtomicUpdateRetainsPolicy": true,
+      "explicitCohostGatewayHTTPS": true,
+      "cohostOtherPortsAndHostAddressesDenied": true,
+      "cohostCrossTenantDenied": true,
+      "gatewayExceptionRemovalRestoresDeny": true,
+      "agentRecreation": true,
+      "scopedNetworkRemoval": true
+    },
+    "desktop": {
+      "result": "linux_desktop_fixture_passed",
+      "image": "sha256:7bcdc2c8a71238b254c165be5f751eed8fa1e9aa1d233c4ff755cdb226563c6f",
+      "desktopImage": "sha256:fc421ba35bc4004c385ee0e917e88e26eefcb8ad95ff76dfff242e3bd233d671",
+      "users": 2,
+      "actualDesktopContainers": true,
+      "nativeDoneBotStatus": true,
+      "nativeCUAFrame": true,
+      "originalMCPBridge": true,
+      "boundedFileDownload": true,
+      "executionUID1000": true,
+      "otherSocketAndVolumeDenied": true,
+      "crossDesktopNetworkDenied": true,
+      "stopStartPersistence": true,
+      "rawViewerWebSocket": true,
+      "viewerExcludesDesktopExec": true,
+      "persistedDiskQuotaAndRestoreAfterDefaultIncrease": true,
+      "nativeViewerWebSocket": true,
+      "runtimeLeaseExpiryStopsAndDisconnectsDesktop": true,
+      "subscriptionStopDisconnectsViewer": true,
+      "stoppedRuntimeRefusesDesktopAccess": true,
+      "combinedEncryptedBackups": true,
+      "corruptionRejectsBeforeEitherOverwrite": true,
+      "idempotentTwoDiskRestore": true,
+      "interruptedTwoDiskRestoreRecovered": true,
+      "explicitDesktopUpgradeRetainsHome": true,
+      "idleStop": true,
+      "purgeRemovesDesktopData": true
+    }
+  },
+  "apiImageContract": {
+    "image": "ghcr.io/zluo003/donebot-cloud-service@sha256:ac18863b290327d0ee3316d0d4f9f202f04f56111659918b66448f3924213348",
+    "isolated": true,
+    "network": "none",
+    "readOnlyRoot": true,
+    "user": "1001:1001",
+    "temporaryData": true,
+    "hostPlatform": "linux/arm64 Docker VM running published linux/amd64 through emulation",
+    "checks": {
+      "result": "published_coding_image_passed",
+      "platform": "linux/x64",
+      "uid": 1001,
+      "health": 200,
+      "static": false,
+      "root": 404,
+      "mobileStatus": 200,
+      "managedInstances": [
+        {
+          "instanceId": "donebot-codex",
+          "access": "api",
+          "install": true
+        },
+        {
+          "instanceId": "donebot-codex-subscription",
+          "access": "subscription",
+          "install": true
+        },
+        {
+          "instanceId": "donebot-claude",
+          "access": "api",
+          "install": true
+        },
+        {
+          "instanceId": "donebot-claude-subscription",
+          "access": "subscription",
+          "install": true
+        }
+      ],
+      "customEndpointsDenied": true,
+      "gatewaySubscriptionAuthDenied": true,
+      "customConfigDenied": true,
+      "network": "none",
+      "paidModelsCalled": false,
+      "realSubscriptionLoginTested": false
+    },
+    "scriptSha256": "2d8a26681bba9f666581ee62616840b2c318d95ceb13b65d4d4ce591687510c7",
+    "productionDeployed": false
+  },
+  "limitations": [
+    "本次发布镜像并更新当前推荐清单，未升级生产实例。",
+    "正式镜像专项检查未执行 npm 安装、真实订阅登录或付费模型调用；任务切换与委派由 DoneBot 隔离端到端测试覆盖。",
+    "Codex 自有订阅登录沿用原版限制，仅支持本机；Cloud 可使用 DoneBot 网关，Claude Code 登录须在对应 Cloud 环境独立授权。",
+    "Cloud 聊天静态前端保持移除，按需图形桌面仍独立提供。"
+  ]
+}

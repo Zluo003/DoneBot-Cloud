@@ -1,5 +1,13 @@
 # 隔离验证记录
 
+## 2026-11-17：可切换编程执行器镜像
+
+[run 44026237249](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44026237249) 首次执行成功，DoneBot 固定为 `1339d9acae44311b29e1dc9f196a6591ad571adc`，Cloud 构建代码为 `e8fcf21559d6e228fb884a7d055b0884336f507d`，平台 `linux/amd64`。新增受管理 Codex／Claude Code 编程执行器，支持选择 DoneBot 网关或自有订阅、保留对话切换来源，复用项目目录、停止、审批和 Bot 委派机制。
+
+真实 Linux 双租户隔离、受控出网及配套桌面检查通过后发布 GHCR；匿名核对两镜像摘要、配置及源码标签，并确认当前 Release 与工作流 artifact 一致。正式服务镜像以无网络、只读根、UID 1001 和临时资料盘启动：健康、手机状态 API 200，根路径 404，无静态前端；四个受管理编程实例的计费来源和安装入口正确，自定义端点、配置及网关实例订阅登录操作被拒绝。原始记录见[发布证据](verification/images-2026-11-17-coding-amd64.json)。
+
+[当前推荐清单](../deploy/images/current-amd64.env)与[固定版本](../deploy/images/2026-11-17-coding-amd64.env)已同步。专项检查未执行 npm 安装、真实订阅登录或付费模型；真实任务切换及委派由 DoneBot 隔离 E2E 覆盖。Codex 订阅登录仅支持本机，Cloud 可使用网关；Claude Code 订阅需在对应 Cloud 环境独立授权。本次仅发布镜像，未升级生产实例。回退清单为 `2026-11-17-artifacts-amd64.env`，保留数据升级流程不变。
+
 ## 2026-11-17：Bot 产物列表镜像
 
 [run 44011099571](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44011099571) 首次执行成功，DoneBot 固定为 `d128b95b79ffc36a978229f0166b297fbab4a9e8`，Cloud 构建代码为 `bcd5425fd05c3e8a7aab57975f9a4a1ce54cb835`，平台 `linux/amd64`。新增 Bot 产物接口，供新版客户端第四个“产物”Tab 汇总该 Bot 向用户汇报及引用的文件。单聊、群聊、跨 Bot 回传使用原消息文件权限，支持任务显示名称、日期倒序和分页；磁盘文件名不变。

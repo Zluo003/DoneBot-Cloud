@@ -1,0 +1,83 @@
+{
+  "restoredAt": "2026-11-17T09:10:26.668367+00:00",
+  "action": "restore_current_images_to_existing_verified_d128b95",
+  "sourceRevision": "d128b95b79ffc36a978229f0166b297fbab4a9e8",
+  "clientRestoreCommit": "f95e97f",
+  "originalPublication": "https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44011099571",
+  "manifest": {
+    "source_revision": "d128b95b79ffc36a978229f0166b297fbab4a9e8",
+    "platform": "linux/amd64",
+    "output": "/home/runner/work/_temp/donebot-images",
+    "docker_context": "current",
+    "archive": false,
+    "images": {
+      "service": {
+        "id": "sha256:d9fb0d2210eb402fa16e2e54da529d93ceae85f248a03a3d4bc31ff12137f6a1",
+        "platform": "linux/amd64",
+        "revision": "d128b95b79ffc36a978229f0166b297fbab4a9e8"
+      },
+      "desktop": {
+        "id": "sha256:49583549db5283ece59236695ca05ecb6f3583763209c3c2f428a87e389faf68",
+        "platform": "linux/amd64",
+        "revision": "d128b95b79ffc36a978229f0166b297fbab4a9e8"
+      }
+    },
+    "cloud_revision": "bcd5425fd05c3e8a7aab57975f9a4a1ce54cb835",
+    "registry": {
+      "service": "ghcr.io/zluo003/donebot-cloud-service@sha256:20b557dc49f6ef68df0d3a3d23d81000d6eec4abdaab5e851e62a3c35d2a0a48",
+      "desktop": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:4c3df98fb1ececb8c9128d158bea0b8d201699f2f00ad919be6b7486032dfd5d"
+    }
+  },
+  "registryVerification": {
+    "checkedAt": "2026-11-17T09:08:05.804901+00:00",
+    "images": [
+      {
+        "kind": "service",
+        "reference": "ghcr.io/zluo003/donebot-cloud-service@sha256:20b557dc49f6ef68df0d3a3d23d81000d6eec4abdaab5e851e62a3c35d2a0a48",
+        "manifestDigestVerified": true,
+        "configDigest": "sha256:d9fb0d2210eb402fa16e2e54da529d93ceae85f248a03a3d4bc31ff12137f6a1",
+        "platform": "linux/amd64",
+        "sourceRevision": "d128b95b79ffc36a978229f0166b297fbab4a9e8",
+        "anonymousPull": true
+      },
+      {
+        "kind": "desktop",
+        "reference": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:4c3df98fb1ececb8c9128d158bea0b8d201699f2f00ad919be6b7486032dfd5d",
+        "manifestDigestVerified": true,
+        "configDigest": "sha256:49583549db5283ece59236695ca05ecb6f3583763209c3c2f428a87e389faf68",
+        "platform": "linux/amd64",
+        "sourceRevision": "d128b95b79ffc36a978229f0166b297fbab4a9e8",
+        "anonymousPull": true
+      }
+    ]
+  },
+  "runtimeSmoke": {
+    "checks": {
+      "result": "restored_artifacts_image_passed",
+      "platform": "linux/x64",
+      "uid": 1001,
+      "health": 200,
+      "static": false,
+      "root": 404,
+      "staticFrontendAbsent": true,
+      "mobileStatus": 200,
+      "instances": [
+        "donebot"
+      ],
+      "managedCodingExecutorsAbsent": true,
+      "customEndpointsAndConfigDenied": true,
+      "temporaryHome": true,
+      "paidModelsCalled": false,
+      "realSubscriptionLoginTested": false
+    },
+    "scriptSha256": "bd5a9794425ffd4e9e5105f1b1067fde205657a19ed451128da405e801ddba27",
+    "network": "none",
+    "readOnlyRoot": true,
+    "uid": 1001,
+    "data": "tmpfs and temporary HOME",
+    "host": "ARM Docker VM emulating linux/amd64"
+  },
+  "originalLinuxVerification": "images-2026-11-17-artifacts-amd64.json",
+  "gatewayGroupsAndKeys": "unchanged",
+  "productionInstancesChanged": false
+}

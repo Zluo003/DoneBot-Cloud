@@ -99,26 +99,26 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 
 #### 已发布的 amd64 镜像
 
-当前推荐为 2026-11-17 API 专用服务与编程执行器更新后的[成功发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44026237249)，新增受管理 Codex／Claude Code 编程执行器及网关／订阅来源选择，保留按 Bot 汇总的产物列表、任务名称显示和预览下载，包含 Bot/群聊之间图片、视频、音频和文档交付，手机附件分段读取和文件版本校验，以及首选／备用模型、失败告知及视频备用确认，并保留此前的手机、附件、群聊及自动化适配。[发布与注册表核验记录](verification/images-2026-11-17-coding-amd64.json)保留源码、不可变摘要与真实 Linux 验证结果。历史文件仅供核对，不是本次升级目标。
+当前推荐为 2026-11-17 API 专用服务与编程执行器更新后的[成功发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44040373800)，包含受管理 Codex／Claude Code 编程执行器，支持 DoneBot 网关、自有订阅和“维持不变”三种来源并可随时切换，保留按 Bot 汇总的产物列表、任务名称显示和预览下载，包含 Bot/群聊之间图片、视频、音频和文档交付，手机附件分段读取和文件版本校验，以及首选／备用模型、失败告知及视频备用确认，并保留此前的手机、附件、群聊及自动化适配。[发布与注册表核验记录](verification/images-2026-11-17-native-coding-amd64.json)保留源码、不可变摘要与真实 Linux 验证结果。历史文件仅供核对，不是本次升级目标。
 
-Codex 自有订阅登录仅支持本机；Cloud 可使用 DoneBot 网关，Claude Code 订阅需在对应 Cloud 环境独立授权。切换入口需要包含 `1339d9a` 的客户端，CLI 安装与订阅授权不从个人电脑自动迁移。
+Codex 自有订阅登录仅支持本机；Cloud 可使用 DoneBot 网关，Claude Code 订阅需在对应 Cloud 环境独立授权。三种来源切换入口需要包含 `c541bda` 的客户端，CLI 安装与订阅授权不从个人电脑自动迁移。“维持不变”仅调用执行环境中已安装并配置好的 CLI，不注入模型、推理档位或 DoneBot 网关凭据。原生网关编程分组需要另行部署 `donebot-api e9b6b89`、执行 `268_donebot_coding_keys.sql` 并在管理后台配置上游和模型白名单；本次镜像发布没有部署网关或升级生产实例。
 
 手机断点续传还需安装包含手机端 `d68d78d` 修复的 App；更新 Cloud 镜像不自动更新手机。该发布包含 HTTP 响应中断防护、Muse 10 秒能力、图片预处理及附件预算整理，桌面共用安装包界面。停留 Cloud 时提前续期、会话结束页返回本地和保存入口续连需安装新版客户端；本次不更改网关的登录期限。Muse 需网关部署对应接口、迁移和模型授权，仅升级镜像不会自动开放模型。意外退出自动恢复需另行更新节点 agent/worker 至 `682308ad059f3d81d4334dd3b96586db7608930e` 或后续版本，不能只换镜像。有效租约下按现有轮询恢复，连续退出使用 5、10、20 秒至 300 秒的有界退避；主动停机、撤销或租约失效不会拉起。Docker 保留 `restart=no`。
 
-DoneBot 源码固定为 `1339d9acae44311b29e1dc9f196a6591ad571adc`，Cloud 验证代码为 `e8fcf21559d6e228fb884a7d055b0884336f507d`。两镜像已通过真实双用户服务、受控出网及专属桌面验证，并核对公开注册表清单和配置；平台为 `linux/amd64`，不要用于 ARM64 节点。
+DoneBot 源码固定为 `c541bda5fe4e05cc22b00e7a8f74fe6373f61af1`，Cloud 验证代码为 `5ea8bba375e4e1482645feb5b7669b97c6229fca`。两镜像已通过真实双用户服务、受控出网及专属桌面验证，并核对公开注册表清单和配置；平台为 `linux/amd64`，不要用于 ARM64 节点。
 
-默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-17-coding-amd64.env](../deploy/images/2026-11-17-coding-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
+默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-17-native-coding-amd64.env](../deploy/images/2026-11-17-native-coding-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
 
 ```dotenv
-CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:ac18863b290327d0ee3316d0d4f9f202f04f56111659918b66448f3924213348
-CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:a852d4f05126f86147e519d10fc42cc48da2034cc6eb14c57b919372e5a6c1d5
+CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:97bed8f8baeb6f7d295a07fd2d24091766a09cb44a2184883d2b2328841c9061
+CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:e83b689b25b9b466696eabf46b0f9414eab0238ee1661a977b2af2fe1ab43a62
 ```
 
 在 amd64 节点直接在线拉取，无需上传离线包或在节点编译 DoneBot：
 
 ```sh
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:ac18863b290327d0ee3316d0d4f9f202f04f56111659918b66448f3924213348
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:a852d4f05126f86147e519d10fc42cc48da2034cc6eb14c57b919372e5a6c1d5
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:97bed8f8baeb6f7d295a07fd2d24091766a09cb44a2184883d2b2328841c9061
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:e83b689b25b9b466696eabf46b0f9414eab0238ee1661a977b2af2fe1ab43a62
 ```
 
 镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应包含上述 Cloud 验证提交及其兼容维护入口，已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费或目标节点状态。

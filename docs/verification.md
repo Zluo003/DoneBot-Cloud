@@ -1,5 +1,13 @@
 # 隔离验证记录
 
+## 2026-11-17：Bot 产物列表镜像
+
+[run 44011099571](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44011099571) 首次执行成功，DoneBot 固定为 `d128b95b79ffc36a978229f0166b297fbab4a9e8`，Cloud 构建代码为 `bcd5425fd05c3e8a7aab57975f9a4a1ce54cb835`，平台 `linux/amd64`。新增 Bot 产物接口，供新版客户端第四个“产物”Tab 汇总该 Bot 向用户汇报及引用的文件。单聊、群聊、跨 Bot 回传使用原消息文件权限，支持任务显示名称、日期倒序和分页；磁盘文件名不变。
+
+真实 Linux 双租户、受控出网及配套图形桌面检查通过后发布 GHCR；匿名核对两镜像摘要、配置及源码标签通过。再从正式发布摘要拉取服务镜像，在无网络、只读根、UID 1001、临时资料目录及无宿主端口的容器内检查：健康和手机状态 API 200、根路径 404、静态前端不存在，合成单聊与群聊共 8 个文件的产物列表、任务显示名称、分页、四类文件 Range 预览、完整下载及伪造路径拒绝。专项检查没有在容器中调用模型或播放真实媒体，详见[发布证据](verification/images-2026-11-17-artifacts-amd64.json)。真实任务派发覆盖见 DoneBot 的 `docs/verification/bot-artifacts.md`。
+
+[当前推荐清单](../deploy/images/current-amd64.env)及[固定版本](../deploy/images/2026-11-17-artifacts-amd64.env)已同步。配套桌面仍供 Bot 工具按需使用，Cloud 聊天网页保持移除。本次仅发布镜像，未升级生产实例；已有实例须按维护流程保留数据升级后才能加载产物。回退镜像清单为 `2026-11-17-attachments-amd64.env`，不回退或删除用户数据。
+
 ## 2026-11-17：已交付附件复用镜像
 
 [run 43938501354](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/43938501354) 第 3 次执行成功，固定 DoneBot `837b7f3db66e9263aeb5a5212729d179daae5878`、Cloud `62be34b49165daa4b90196e20caefc5072969bc6`。普通 Bot、协调 Bot 和群聊的已交付图片、视频、音频及文档直接汇报；再次附加时复用已有文件，不重复复制，也不因这次操作触发“部分完成”。真实 Linux 双租户、受控出网和图形桌面检查通过后发布 GHCR；匿名摘要、平台、源码标签及已发布服务镜像的隔离启动检查通过，见[发布证据](verification/images-2026-11-17-attachments-amd64.json)。

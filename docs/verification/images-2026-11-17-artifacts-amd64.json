@@ -1,0 +1,175 @@
+{
+  "date": "2026-11-17",
+  "workflow": "https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44011099571",
+  "attempt": 1,
+  "conclusion": "success",
+  "manifest": {
+    "source_revision": "d128b95b79ffc36a978229f0166b297fbab4a9e8",
+    "platform": "linux/amd64",
+    "output": "/home/runner/work/_temp/donebot-images",
+    "docker_context": "current",
+    "archive": false,
+    "images": {
+      "service": {
+        "id": "sha256:d9fb0d2210eb402fa16e2e54da529d93ceae85f248a03a3d4bc31ff12137f6a1",
+        "platform": "linux/amd64",
+        "revision": "d128b95b79ffc36a978229f0166b297fbab4a9e8"
+      },
+      "desktop": {
+        "id": "sha256:49583549db5283ece59236695ca05ecb6f3583763209c3c2f428a87e389faf68",
+        "platform": "linux/amd64",
+        "revision": "d128b95b79ffc36a978229f0166b297fbab4a9e8"
+      }
+    },
+    "cloud_revision": "bcd5425fd05c3e8a7aab57975f9a4a1ce54cb835",
+    "registry": {
+      "service": "ghcr.io/zluo003/donebot-cloud-service@sha256:20b557dc49f6ef68df0d3a3d23d81000d6eec4abdaab5e851e62a3c35d2a0a48",
+      "desktop": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:4c3df98fb1ececb8c9128d158bea0b8d201699f2f00ad919be6b7486032dfd5d"
+    }
+  },
+  "registryVerification": [
+    {
+      "kind": "service",
+      "reference": "ghcr.io/zluo003/donebot-cloud-service@sha256:20b557dc49f6ef68df0d3a3d23d81000d6eec4abdaab5e851e62a3c35d2a0a48",
+      "anonymousPullMetadata": true,
+      "registryDigestVerified": true,
+      "imageConfigDigest": "sha256:d9fb0d2210eb402fa16e2e54da529d93ceae85f248a03a3d4bc31ff12137f6a1",
+      "platform": "linux/amd64",
+      "sourceRevision": "d128b95b79ffc36a978229f0166b297fbab4a9e8",
+      "layers": 13
+    },
+    {
+      "kind": "desktop",
+      "reference": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:4c3df98fb1ececb8c9128d158bea0b8d201699f2f00ad919be6b7486032dfd5d",
+      "anonymousPullMetadata": true,
+      "registryDigestVerified": true,
+      "imageConfigDigest": "sha256:49583549db5283ece59236695ca05ecb6f3583763209c3c2f428a87e389faf68",
+      "platform": "linux/amd64",
+      "sourceRevision": "d128b95b79ffc36a978229f0166b297fbab4a9e8",
+      "layers": 20
+    }
+  ],
+  "registryCheckedAt": "2026-11-17T03:44:34.221710+00:00",
+  "linuxVerification": {
+    "linux": {
+      "result": "linux_fixture_passed",
+      "platform": "linux",
+      "arch": "x64",
+      "kernel": "7.0.0-1017-azure",
+      "node": "v24.18.0",
+      "dockerServer": "28.0.4",
+      "image": "sha256:d9fb0d2210eb402fa16e2e54da529d93ceae85f248a03a3d4bc31ff12137f6a1",
+      "users": 2,
+      "separateNetworkNamespaces": true,
+      "crossVolumeDenied": true,
+      "dockerSocketAbsent": true,
+      "controlSecretsAbsent": true,
+      "networkDenied": true,
+      "persistence": true,
+      "scopedPurge": true,
+      "publicInternetEgress": false
+    },
+    "egress": {
+      "result": "controlled_egress_fixture_passed",
+      "kernel": "7.0.0-1017-azure",
+      "node": "v24.18.0",
+      "docker": "28.0.4",
+      "nft": "nftables v1.0.9 (Old Doc Yak #3)",
+      "image": "sha256:d9fb0d2210eb402fa16e2e54da529d93ceae85f248a03a3d4bc31ff12137f6a1",
+      "users": 2,
+      "publicHTTP": true,
+      "publicHTTPSAndDNS": true,
+      "gatewayAnonymous401": true,
+      "tenantNetworkDenied": true,
+      "hostPrivateAndPublicDenied": true,
+      "metadataDenied": true,
+      "customPublicRangeDenied": true,
+      "unapprovedTCPAndUDPDenied": true,
+      "IPv6Denied": true,
+      "mappedIPv4AndRebindingDenied": true,
+      "unsolicitedInboundDenied": true,
+      "firewallUnavailableBlocksCreation": true,
+      "foreignFirewallTablePreserved": true,
+      "failedAtomicUpdateRetainsPolicy": true,
+      "explicitCohostGatewayHTTPS": true,
+      "cohostOtherPortsAndHostAddressesDenied": true,
+      "cohostCrossTenantDenied": true,
+      "gatewayExceptionRemovalRestoresDeny": true,
+      "agentRecreation": true,
+      "scopedNetworkRemoval": true
+    },
+    "desktop": {
+      "result": "linux_desktop_fixture_passed",
+      "image": "sha256:d9fb0d2210eb402fa16e2e54da529d93ceae85f248a03a3d4bc31ff12137f6a1",
+      "desktopImage": "sha256:49583549db5283ece59236695ca05ecb6f3583763209c3c2f428a87e389faf68",
+      "users": 2,
+      "actualDesktopContainers": true,
+      "nativeDoneBotStatus": true,
+      "nativeCUAFrame": true,
+      "originalMCPBridge": true,
+      "boundedFileDownload": true,
+      "executionUID1000": true,
+      "otherSocketAndVolumeDenied": true,
+      "crossDesktopNetworkDenied": true,
+      "stopStartPersistence": true,
+      "rawViewerWebSocket": true,
+      "viewerExcludesDesktopExec": true,
+      "persistedDiskQuotaAndRestoreAfterDefaultIncrease": true,
+      "nativeViewerWebSocket": true,
+      "runtimeLeaseExpiryStopsAndDisconnectsDesktop": true,
+      "subscriptionStopDisconnectsViewer": true,
+      "stoppedRuntimeRefusesDesktopAccess": true,
+      "combinedEncryptedBackups": true,
+      "corruptionRejectsBeforeEitherOverwrite": true,
+      "idempotentTwoDiskRestore": true,
+      "interruptedTwoDiskRestoreRecovered": true,
+      "explicitDesktopUpgradeRetainsHome": true,
+      "idleStop": true,
+      "purgeRemovesDesktopData": true
+    }
+  },
+  "apiImageContract": {
+    "image": "ghcr.io/zluo003/donebot-cloud-service@sha256:20b557dc49f6ef68df0d3a3d23d81000d6eec4abdaab5e851e62a3c35d2a0a48",
+    "isolated": true,
+    "network": "none",
+    "readOnlyRoot": true,
+    "user": "1001:1001",
+    "temporaryData": true,
+    "hostPlatform": "linux/arm64 Docker VM running published linux/amd64 through emulation",
+    "syntheticTranscriptSeed": true,
+    "checks": {
+      "result": "published_artifacts_image_passed",
+      "platform": "linux/x64",
+      "uid": 1001,
+      "health": 200,
+      "static": false,
+      "root": 404,
+      "mobileStatus": 200,
+      "artifacts": 200,
+      "files": 8,
+      "direct": true,
+      "room": true,
+      "types": [
+        "image",
+        "video",
+        "audio",
+        "document"
+      ],
+      "taskDisplayNames": true,
+      "pagination": true,
+      "exactMessageSources": true,
+      "rangePreview": true,
+      "downloadBytes": true,
+      "forgedPathsDenied": true,
+      "realMediaPlayback": false
+    },
+    "scriptSha256": "8cbc1904078e8e0cc6a5073332ac2b1b70a567543395daf09a6bbb92a07a8fd8",
+    "productionDeployed": false
+  },
+  "limitations": [
+    "已发布镜像并更新当前推荐清单，未升级生产实例。",
+    "产物专项镜像检查使用合成的单聊、群聊及跨 Bot 汇报记录；真实派发与媒体回传由 DoneBot 隔离端到端测试覆盖。",
+    "专项检查验证四类文件列表、Range 预览及完整下载字节，不代表容器中真实媒体播放或付费模型验收。",
+    "Cloud 聊天静态前端保持移除；Bot 使用的按需图形桌面仍保留。"
+  ]
+}

@@ -1,3 +1,4 @@
+import { PERSONAL_DESKTOP } from './team-runtime.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer, request } from 'node:http';
@@ -61,7 +62,7 @@ export class CloudDesktops {
     this.dir = privateDir(join(host.stateDir, 'desktops')); this.store = new Store(join(this.dir, 'metadata'));
     this.store.db.exec('CREATE TABLE IF NOT EXISTS desktops(id TEXT PRIMARY KEY,password TEXT NOT NULL)');
     this.control = new DesktopControl(this.store);
-    this.disks = new BoundedDisks({ stateDir: this.dir, store: this.store, bytes, owner: 1000 });
+    this.disks = new BoundedDisks({ stateDir: this.dir, store: this.store, bytes, owner: 1000, limitFor: id => host.teamConfiguration?.(id)?.desktop.storage_gib * 1024 ** 3 || bytes });
     this.backups = new Backups({ stateDir: this.dir, store: this.store, disks: this.disks });
     this.egress = host.egress ? new Egress({ namespace: host.namespace, store: this.store, dns: egressDNS, denyIPv4: egressDenyIPv4, binary: nftBinary }) : null;
     // A different table and bridge per desktop; the runtime and desktop never share a network.
@@ -97,13 +98,15 @@ export class CloudDesktops {
     const expected = this.networkOptions(id), address = value.IPAM?.Config?.[0]?.Subnet;
     if (value.Driver !== 'bridge' || value.Internal || value.EnableIPv6 || value.Ingress || value.IPAM?.Config?.length !== 1 || !/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/.test(address || '') || JSON.stringify(Object.entries(value.Options || {}).sort()) !== JSON.stringify(Object.entries(expected).sort()) || Object.values(value.Containers || {}).some(c => c.Name !== this.names(id).container)) throw new Fault(409, 'desktop_network_mismatch');
   }
+  limits(id) { return this.host?.teamConfiguration?.(id)?.desktop || PERSONAL_DESKTOP; }
   check(value, id) {
+    const limits = this.limits(id);
     this.checkLabels(value, id); const h = value.HostConfig, n = this.names(id), mounts = value.Mounts.filter(m => m.Type !== 'tmpfs');
     const network = this.egress ? n.network : 'none';
     const tmpfs = { '/tmp': 'rw,nosuid,nodev,size=256m,mode=1777', '/run': 'rw,nosuid,nodev,size=16m,mode=755', '/var/log': 'rw,nosuid,nodev,size=64m,mode=755' };
     if (value.Config.Hostname !== 'donebot-desktop' || h.ExtraHosts?.join(',') !== 'donebot-desktop:127.0.0.1') throw new Fault(409, 'desktop_resource_spec_mismatch');
     if (JSON.stringify(value.Config.Entrypoint) !== '["/bin/sh"]' || JSON.stringify(value.Config.Cmd) !== JSON.stringify(['-c', init]) || !value.Config.Env.includes('VNC_PW=' + this.password(id)) || h.ShmSize !== 512 * 1024 ** 2 || mounts.some(m => !m.RW) || Object.entries(tmpfs).some(([key, expected]) => h.Tmpfs?.[key] !== expected)) throw new Fault(409, 'desktop_resource_spec_mismatch');
-    if (value.Config.Image !== this.image || value.Config.User !== '0:0' || !h.ReadonlyRootfs || h.Privileged || h.Memory !== 2147483648 || h.MemorySwap !== 2147483648 || h.NanoCpus !== 1e9 || h.PidsLimit !== 512 || h.CapDrop?.join(',') !== 'ALL' || (h.CapAdd || []).map(cap => cap.replace(/^CAP_/, '')).sort().join(',') !== 'CHOWN,DAC_OVERRIDE,FOWNER,SETGID,SETUID' || !h.SecurityOpt?.includes('no-new-privileges') || h.NetworkMode !== network || Object.keys(value.NetworkSettings.Networks).some(name => name !== network) || Object.keys(h.PortBindings || {}).length || mounts.length !== 2 || !mounts.some(m => m.Type === 'volume' && m.Name === n.volume && m.Destination === '/home/cua') || !mounts.some(m => m.Type === 'bind' && m.Source === n.edge && m.Destination === '/run/donebot-desktop') || h.RestartPolicy?.Name !== 'no' || h.PidMode || h.IpcMode !== 'private' || h.CgroupnsMode !== 'private' || h.Devices?.length || h.DeviceRequests?.length || Object.keys(h.Tmpfs || {}).sort().join(',') !== '/run,/tmp,/var/log' || (this.egress && h.Dns.join(',') !== this.egress.dns.join(','))) throw new Fault(409, 'desktop_resource_spec_mismatch');
+    if (value.Config.Image !== this.image || value.Config.User !== '0:0' || !h.ReadonlyRootfs || h.Privileged || h.Memory !== limits.memory_mib * 1024 ** 2 || h.MemorySwap !== limits.memory_mib * 1024 ** 2 || h.NanoCpus !== limits.cpu_millis * 1e6 || h.PidsLimit !== limits.pids || h.CapDrop?.join(',') !== 'ALL' || (h.CapAdd || []).map(cap => cap.replace(/^CAP_/, '')).sort().join(',') !== 'CHOWN,DAC_OVERRIDE,FOWNER,SETGID,SETUID' || !h.SecurityOpt?.includes('no-new-privileges') || h.NetworkMode !== network || Object.keys(value.NetworkSettings.Networks).some(name => name !== network) || Object.keys(h.PortBindings || {}).length || mounts.length !== 2 || !mounts.some(m => m.Type === 'volume' && m.Name === n.volume && m.Destination === '/home/cua') || !mounts.some(m => m.Type === 'bind' && m.Source === n.edge && m.Destination === '/run/donebot-desktop') || h.RestartPolicy?.Name !== 'no' || h.PidMode || h.IpcMode !== 'private' || h.CgroupnsMode !== 'private' || h.Devices?.length || h.DeviceRequests?.length || Object.keys(h.Tmpfs || {}).sort().join(',') !== '/run,/tmp,/var/log' || (this.egress && h.Dns.join(',') !== this.egress.dns.join(','))) throw new Fault(409, 'desktop_resource_spec_mismatch');
   }
   async imageReady() {
     const image = await this.host.inspect('image', this.image);
@@ -127,6 +130,7 @@ export class CloudDesktops {
     this.checkVolume(volume, id);
   }
   async start(id) {
+    const limits = this.limits(id);
     this.authorize(id); if (!await this.imageReady()) throw new Fault(503, 'desktop_image_unavailable');
     const n = this.names(id), labels = Object.entries(this.labels(id)).flatMap(([k, v]) => ['--label', k + '=' + v]);
     let value = await this.host.inspect('container', n.container); if (value) this.check(value, id);
@@ -139,7 +143,7 @@ export class CloudDesktops {
     if (!this.store.get('SELECT id FROM desktops WHERE id=?', id)) this.store.run('INSERT INTO desktops VALUES(?,?)', id, this.store.vault.seal(randomBytes(18).toString('base64url')));
     mkdirSync(n.edge, { mode: 0o700, recursive: true }); chownSync(n.edge, 1000, 1000);
     if (!value) {
-      await this.host.docker(['container', 'create', '--name', n.container, ...labels, '--user', '0:0', '--hostname', 'donebot-desktop', '--add-host', 'donebot-desktop:127.0.0.1', '--read-only', '--cap-drop', 'ALL', ...['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETGID', 'SETUID'].flatMap(cap => ['--cap-add', cap]), '--security-opt', 'no-new-privileges', '--memory', '2g', '--memory-swap', '2g', '--cpus', '1', '--pids-limit', '512', '--shm-size', '512m', '--ipc', 'private', '--cgroupns', 'private', '--network', this.egress ? n.network : 'none', ...(this.egress ? this.egress.dns.flatMap(ip => ['--dns', ip]) : []), '--restart', 'no', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m,mode=1777', '--tmpfs', '/run:rw,nosuid,nodev,size=16m,mode=755', '--tmpfs', '/var/log:rw,nosuid,nodev,size=64m,mode=755', '--mount', `type=volume,src=${n.volume},dst=/home/cua`, '--mount', `type=bind,src=${n.edge},dst=/run/donebot-desktop`, '--env', 'VNC_PW=' + this.password(id), '--entrypoint', '/bin/sh', this.image, '-c', init]);
+      await this.host.docker(['container', 'create', '--name', n.container, ...labels, '--user', '0:0', '--hostname', 'donebot-desktop', '--add-host', 'donebot-desktop:127.0.0.1', '--read-only', '--cap-drop', 'ALL', ...['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETGID', 'SETUID'].flatMap(cap => ['--cap-add', cap]), '--security-opt', 'no-new-privileges', '--memory', `${limits.memory_mib}m`, '--memory-swap', `${limits.memory_mib}m`, '--cpus', String(limits.cpu_millis / 1000), '--pids-limit', String(limits.pids), '--shm-size', '512m', '--ipc', 'private', '--cgroupns', 'private', '--network', this.egress ? n.network : 'none', ...(this.egress ? this.egress.dns.flatMap(ip => ['--dns', ip]) : []), '--restart', 'no', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m,mode=1777', '--tmpfs', '/run:rw,nosuid,nodev,size=16m,mode=755', '--tmpfs', '/var/log:rw,nosuid,nodev,size=64m,mode=755', '--mount', `type=volume,src=${n.volume},dst=/home/cua`, '--mount', `type=bind,src=${n.edge},dst=/run/donebot-desktop`, '--env', 'VNC_PW=' + this.password(id), '--entrypoint', '/bin/sh', this.image, '-c', init]);
       value = await this.host.inspect('container', n.container); this.check(value, id);
     }
     this.authorize(id);
@@ -310,7 +314,8 @@ export class CloudDesktops {
   async drain(id) { await this.queues.get(id)?.catch(() => {}); }
   resources(id) {
     const stat = this.disks.mounted(id) ? statfsSync(this.disks.mountPath(id)) : null;
-    return { enabled: true, cpu_cores: 1, memory_bytes: 2147483648, storage: { enforced: true, limit_bytes: this.disks.bytesFor(id), ...(stat ? { available_bytes: stat.bavail * stat.bsize, total_bytes: stat.blocks * stat.bsize } : {}) }, idle_timeout_seconds: this.idleMs / 1000 };
+    const limits = this.limits(id);
+    return { enabled: true, cpu_cores: limits.cpu_millis / 1000, memory_bytes: limits.memory_mib * 1024 ** 2, pids: limits.pids, storage: { enforced: true, limit_bytes: this.disks.bytesFor(id), ...(stat ? { available_bytes: stat.bavail * stat.bsize, total_bytes: stat.blocks * stat.bsize } : {}) }, idle_timeout_seconds: this.idleMs / 1000 };
   }
   async close() { clearInterval(this.timer); for (const item of this.streams) item.kill(); for (const { server, sockets, path } of this.servers.values()) { for (const socket of sockets) socket.destroy(); await close(server); rmSync(path, { force: true }); } await Promise.allSettled(this.queues.values()); this.store.close(); }
 }

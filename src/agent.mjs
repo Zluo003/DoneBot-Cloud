@@ -4,6 +4,7 @@ import { connect } from 'node:net';
 import { Fault, body, close, fail, instanceID, json, listen } from './common.mjs';
 import { httpProxy, proxyHeaders, safePath, wsProxy, wsServer } from './proxy.mjs';
 import { MAX_RUN_LEASE_MS, runLeaseDeadline, runLeaseValid } from './run-lease.mjs';
+import { teamRequest } from './team-runtime.mjs';
 
 export async function createAgent({ socketPath, runtime, publicOrigin, development = false, socketGroup, credentialCheckMs = 60000, requireLease = !development, backupIntervalMs = 0 }) {
   if (!Number.isSafeInteger(backupIntervalMs) || backupIntervalMs < 0 || backupIntervalMs > 30 * 86400000) throw new Error('invalid backup interval');
@@ -35,7 +36,9 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
     const origin = req.headers['x-cloud-origin'];
     if (origin !== publicOrigin && !(development && /^http:\/\/127\.0\.0\.1:\d+$/.test(origin || ''))) throw new Fault(403, 'origin_forbidden');
     const value = active.get(id); if (!authorized(id) || !value || value.expiresAt <= Date.now()) throw new Fault(409, 'instance_not_ready');
-    return { ...value, origin };
+    const path = safePath(req.url.replace(/^\/v1\/instances\/[^/]+\/proxy/, '') || '/');
+    const member = value.team ? teamRequest(value.team, req, path) : null;
+    return { ...value, origin, member };
   }
   const server = createServer(async (req, res) => {
     try {
@@ -62,6 +65,11 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
         const result = await serial(id, async () => {
           if (action === 'start') {
             if (!authorized(id)) throw new Fault(403, 'runtime_lease_expired');
+            if (input.team !== undefined && input.gateway !== undefined) throw new Fault(400, 'ambiguous_runtime_scope');
+            if (input.team !== undefined) {
+              if (!runtime.configureTeam) throw new Fault(503, 'team_runtime_unsupported');
+              await runtime.configureTeam(id, input.team);
+            }
             if (input.gateway !== undefined) {
               if (!runtime.configureGateway) throw new Fault(503, 'runtime_gateway_unsupported');
               await runtime.configureGateway(id, input.gateway);
@@ -82,17 +90,20 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
       if (pathname === '/api/cloud/resources' && req.method === 'GET' && runtime.resources) return json(res, 200, { ...await runtime.resources(id), backups: { automatic_interval_hours: backupIntervalMs / 3600000 } });
       const backup = /^\/api\/cloud\/backups(?:\/([^/]+)(\/restore)?)?$/.exec(pathname);
       if (backup) {
+        if (value.member && value.member.role === 'member') throw new Fault(403, 'team_backup_admin_required');
         if (!runtime.backups) throw new Fault(503, 'backups_unavailable');
         const snapshot = backup[1] && instanceID(backup[1]);
         if (!snapshot && req.method === 'GET') return json(res, 200, runtime.backups.list(id));
         if (snapshot && !backup[2] && req.method === 'DELETE') {
-          return json(res, 200, await serial(id, async () => { target(req, id); runtime.backups.remove(id, snapshot); return { deleted: true }; }));
+          return json(res, 200, await serial(id, async () => { const current = target(req, id); if (current.member?.role === 'member') throw new Fault(403, 'team_backup_admin_required'); runtime.backups.remove(id, snapshot); return { deleted: true }; }));
         }
         if (req.method !== 'POST' || snapshot && !backup[2]) throw new Fault(405, 'method_not_allowed');
         const input = await body(req), key = instanceID(input.request_key);
         if (input.confirm !== true) throw new Fault(400, 'backup_confirmation_required');
         const result = await serial(id, async () => {
-          target(req, id); active.delete(id); disconnect(id);
+          const current = target(req, id);
+          if (current.member && current.member.role === 'member') throw new Fault(403, 'team_backup_admin_required');
+          active.delete(id); disconnect(id);
           try {
             await runtime.stop(id);
             if (snapshot) { await runtime.backups.restore(id, snapshot, key); return { restored: true }; }
@@ -104,7 +115,9 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
       }
       const pinned = runtime.pinSocket?.(id);
       try {
-        const outgoing = httpProxy(req, res, { socketPath: pinned?.socketPath || value.socketPath, path }, proxyHeaders(req, value.origin, value.token), track(id));
+        const headers = proxyHeaders(req, value.origin, value.team ? undefined : value.token);
+        if (value.member) headers['x-donebot-team-grant'] = value.member.token;
+        const outgoing = httpProxy(req, res, { socketPath: pinned?.socketPath || value.socketPath, path }, headers, track(id));
         outgoing.once('close', () => pinned?.release());
       } catch (e) { pinned?.release(); throw e; }
     } catch (e) { fail(res, e); }
@@ -115,7 +128,9 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
       const id = instanceID(match[1]), value = target(req, id);
       const pinned = runtime.pinSocket?.(id);
       try {
-        const upstream = wsProxy(wss, req, socket, head, { socketPath: pinned?.socketPath || value.socketPath, path: safePath(match[2]) }, proxyHeaders(req, value.origin, value.token), track(id));
+        const headers = proxyHeaders(req, value.origin, value.team ? undefined : value.token);
+        if (value.member) headers['x-donebot-team-grant'] = value.member.token;
+        const upstream = wsProxy(wss, req, socket, head, { socketPath: pinned?.socketPath || value.socketPath, path: safePath(match[2]) }, headers, track(id));
         upstream.once('close', () => pinned?.release());
       } catch (e) { pinned?.release(); throw e; }
     } catch (e) { socket.end(`HTTP/1.1 ${e.status || 503} Rejected\r\nConnection: close\r\n\r\n`); }

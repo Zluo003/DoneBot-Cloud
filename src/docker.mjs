@@ -11,6 +11,7 @@ import { Backups } from './backups.mjs';
 import { CloudDesktops } from './desktops.mjs';
 import { InstanceBackups } from './instance-backups.mjs';
 import { cloudStorageLimits, CLOUD_STORAGE_MAX_BYTES } from './resource-limits.mjs';
+import { PERSONAL_RUNTIME, TEAM_PROTOCOL, teamConfiguration, teamEnvironment, teamPublicKey } from './team-runtime.mjs';
 
 const execute = promisify(execFile);
 // Executed only by the host agent, with no user-supplied command or arguments.
@@ -20,24 +21,26 @@ const p=await call('/api/auth/pairing',{label:'DoneBot Cloud access',scopes:['ad
 const s=await call('/api/auth/pair',{code:p.code,label:'DoneBot Cloud access'});process.stdout.write(JSON.stringify(s));`;
 
 export class DockerRuntime {
-  constructor({ stateDir, image, development = false, binary = '/usr/local/bin/docker', healthTimeoutMs = 90000, egress = 'none', egressDNS, egressDenyIPv4, gatewayIPv4, nftBinary, gatewayRequired = false, storage = 'volume', storageBytes, desktopImage, desktopBytes, desktopIdleMs }) {
+  constructor({ stateDir, image, development = false, binary = '/usr/local/bin/docker', healthTimeoutMs = 90000, egress = 'none', egressDNS, egressDenyIPv4, gatewayIPv4, nftBinary, gatewayRequired = false, storage = 'volume', storageBytes, desktopImage, desktopBytes, desktopIdleMs, teamsEnabled = false, teamPublicKey: pinnedTeamKey }) {
     if (!development && !/^(?:[a-zA-Z0-9./:_-]+@)?sha256:[a-f0-9]{64}$/.test(image || '')) throw new Error('production requires an immutable DoneBot image digest');
     if (!image || /\s|[\x00-\x1f]/.test(image)) throw new Error('invalid image');
     if (!['none', 'public-web'].includes(egress)) throw new Error('invalid egress mode');
     if (egress !== 'none' && (process.platform !== 'linux' || process.getuid() !== 0 || !/^unix:\/\/\//.test(process.env.DOCKER_HOST || 'unix:///var/run/docker.sock'))) throw new Error('public-web egress requires root and a local Linux Docker engine');
     const limits = cloudStorageLimits(storageBytes, desktopBytes);
     this.stateDir = privateDir(stateDir); this.image = image; this.binary = binary; this.healthTimeoutMs = healthTimeoutMs;
-    this.gatewayRequired = gatewayRequired;
+    this.gatewayRequired = gatewayRequired; this.teamsEnabled = teamsEnabled; this.pinnedTeamKey = pinnedTeamKey;
+    if (teamsEnabled) teamPublicKey(pinnedTeamKey);
     const path = join(stateDir, 'deployment-id');
     try { writeFileSync(path, randomUUID(), { mode: 0o600, flag: 'wx' }); } catch (e) { if (e.code !== 'EEXIST') throw e; }
     this.namespace = instanceID(readFileSync(path, 'utf8'));
     this.store = new Store(join(stateDir, 'metadata'));
     this.store.db.exec('CREATE TABLE IF NOT EXISTS credentials(id TEXT PRIMARY KEY,value TEXT NOT NULL)');
     this.store.db.exec('CREATE TABLE IF NOT EXISTS runtime_credentials(id TEXT PRIMARY KEY,value TEXT NOT NULL)');
+    this.store.db.exec('CREATE TABLE IF NOT EXISTS team_runtimes(id TEXT PRIMARY KEY,value TEXT NOT NULL)');
     this.egress = egress === 'none' ? null : new Egress({ namespace: this.namespace, store: this.store, dns: egressDNS, denyIPv4: egressDenyIPv4, gatewayIPv4, binary: nftBinary });
     if (!['volume', 'bounded-ext4'].includes(storage)) throw new Error('invalid storage mode');
     if (storage === 'bounded-ext4' && !/^unix:\/\/\//.test(process.env.DOCKER_HOST || 'unix:///var/run/docker.sock')) throw new Error('bounded storage requires local Docker');
-    this.disks = storage === 'bounded-ext4' ? new BoundedDisks({ stateDir: this.stateDir, store: this.store, bytes: limits.runtime }) : null;
+    this.disks = storage === 'bounded-ext4' ? new BoundedDisks({ stateDir: this.stateDir, store: this.store, bytes: limits.runtime, limitFor: id => { const team = this.teamConfiguration(id); return team ? team.runtime.storage_gib * 1024 ** 3 : limits.runtime; } }) : null;
     this.backups = this.disks ? new Backups({ stateDir: this.stateDir, store: this.store, disks: this.disks }) : null;
     this.desktops = desktopImage ? new CloudDesktops(this, { image: desktopImage, bytes: limits.desktop, idleMs: desktopIdleMs, egressDNS, egressDenyIPv4, nftBinary }) : null;
     if (this.desktops && !this.backups) throw new Error('Cloud desktops require bounded-ext4 storage');
@@ -78,22 +81,44 @@ export class DockerRuntime {
   }
   checkContainer(value, id, names) {
     this.checkLabels(value, id);
-    if (this.gatewayRequired && !value.Config.Env?.includes('DONEBOT_CLOUD_CREDENTIAL_FILE=/run/donebot/gateway.json')) throw new Fault(409, 'resource_spec_mismatch');
+    const team = this.teamConfiguration(id), limits = team?.runtime || PERSONAL_RUNTIME;
+    const env = value.Config.Env || [];
+    if (team && (teamEnvironment(team).some(entry => !env.includes(entry)) || env.some(entry => entry.startsWith('DONEBOT_CLOUD_CREDENTIAL_FILE='))) || !team && env.some(entry => entry.startsWith('DONEBOT_TEAM_'))) throw new Fault(409, 'team_runtime_trust_mismatch');
+    if (this.gatewayRequired && !team && !env.includes('DONEBOT_CLOUD_CREDENTIAL_FILE=/run/donebot/gateway.json')) throw new Fault(409, 'resource_spec_mismatch');
     if (this.desktops && !value.Config.Env?.includes('DONEBOT_CLOUD_DESKTOP_SOCKET=/run/donebot/cloud-desktop.sock')) throw new Fault(409, 'resource_spec_mismatch');
     const h = value.HostConfig, mounts = value.Mounts.filter(m => m.Type !== 'tmpfs');
     if (value.Mounts.some(m => m.Type === 'tmpfs' && !['/tmp', '/run'].includes(m.Destination)) || Object.keys(h.Tmpfs || {}).sort().join(',') !== '/run,/tmp') throw new Fault(409, 'resource_spec_mismatch');
     const network = this.egress ? names.network : 'none';
     if (h.NetworkMode !== network || Object.keys(value.NetworkSettings.Networks).some(name => name !== network) || (this.egress && h.Dns.join(',') !== this.egress.dns.join(','))) throw new Fault(409, 'network_spec_mismatch');
-    if (value.Config.Image !== this.image || value.Config.User !== '1001:1001' || !h.ReadonlyRootfs || h.Privileged || h.Memory !== 2147483648 || h.MemorySwap !== 2147483648 || h.NanoCpus !== 1e9 || h.PidsLimit !== 256 || h.CapDrop?.join(',') !== 'ALL' || h.CapAdd?.length || !h.SecurityOpt?.includes('no-new-privileges') || mounts.length !== 2 || !mounts.some(m => m.Type === 'volume' && m.Name === names.volume && m.Destination === '/data') || !mounts.some(m => m.Type === 'bind' && m.Source === names.edge && m.Destination === '/run/donebot') || Object.keys(h.PortBindings || {}).length) throw new Fault(409, 'resource_spec_mismatch');
+    if (value.Config.Image !== this.image || value.Config.User !== '1001:1001' || !h.ReadonlyRootfs || h.Privileged || h.Memory !== limits.memory_mib * 1024 ** 2 || h.MemorySwap !== limits.memory_mib * 1024 ** 2 || h.NanoCpus !== limits.cpu_millis * 1e6 || h.PidsLimit !== limits.pids || h.CapDrop?.join(',') !== 'ALL' || h.CapAdd?.length || !h.SecurityOpt?.includes('no-new-privileges') || mounts.length !== 2 || !mounts.some(m => m.Type === 'volume' && m.Name === names.volume && m.Destination === '/data') || !mounts.some(m => m.Type === 'bind' && m.Source === names.edge && m.Destination === '/run/donebot') || Object.keys(h.PortBindings || {}).length) throw new Fault(409, 'resource_spec_mismatch');
   }
   async status(id) { const names = this.names(id), value = await this.inspect('container', names.container); if (!value) return { state: 'absent' }; this.checkContainer(value, id, names); return { state: value.State.Running ? 'running' : 'stopped' }; }
   configureGateway(id, value) {
     instanceID(id);
+    if (this.teamConfiguration(id)) throw new Fault(403, 'team_personal_credential_forbidden');
     if (!value || value.installationId !== id || !/^sk-donebot-[a-f0-9]{64}$/.test(value.credential || '') || !/^[1-9][0-9]{0,19}$/.test(value.user?.id || '') || typeof value.user?.email !== 'string' || !value.user.email || value.user.email.length > 320) throw new Fault(400, 'invalid_runtime_credential');
     const clean = { installationId: id, credential: value.credential, user: { id: value.user.id, email: value.user.email } };
     this.store.run('INSERT OR REPLACE INTO runtime_credentials VALUES(?,?)', id, this.store.vault.seal(clean));
   }
+  teamConfiguration(id) {
+    const saved = this.store.get('SELECT value FROM team_runtimes WHERE id=?', instanceID(id));
+    return saved ? teamConfiguration(JSON.parse(saved.value), id, this.pinnedTeamKey) : null;
+  }
+  async configureTeam(id, value) {
+    if (!this.teamsEnabled) throw new Fault(503, 'team_runtime_disabled');
+    const clean = teamConfiguration(value, id, this.pinnedTeamKey), saved = this.teamConfiguration(id);
+    if (this.store.get('SELECT id FROM runtime_credentials WHERE id=?', id)) throw new Fault(403, 'team_personal_credential_forbidden');
+    if (saved) {
+      const { name: oldName, ...before } = saved, { name: newName, ...after } = clean;
+      if (JSON.stringify(before) !== JSON.stringify(after)) throw new Fault(409, 'team_runtime_spec_immutable');
+      return;
+    }
+    const names = this.names(id);
+    if (await this.inspect('container', names.container) || await this.inspect('volume', names.volume)) throw new Fault(409, 'team_runtime_scope_immutable');
+    this.store.run('INSERT INTO team_runtimes VALUES(?,?)', id, JSON.stringify(clean));
+  }
   writeGateway(id, edge) {
+    if (this.teamConfiguration(id)) return;
     const saved = this.store.get('SELECT value FROM runtime_credentials WHERE id=?', id);
     if (!saved) { if (this.gatewayRequired) throw new Fault(503, 'runtime_credential_required'); return; }
     const temporary = join(edge, '.gateway-' + randomUUID());
@@ -132,10 +157,12 @@ export class DockerRuntime {
     catch (e) { await this.stop(id); throw e; }
   }
   async startRuntime(id) {
+    const team = this.teamConfiguration(id), limits = team?.runtime || PERSONAL_RUNTIME;
+    if (team && !this.teamsEnabled) throw new Fault(503, 'team_runtime_disabled');
     const names = this.names(id), labels = Object.entries(this.labels(id)).flatMap(([k, v]) => ['--label', `${k}=${v}`]);
     let container = await this.inspect('container', names.container);
     if (container) this.checkContainer(container, id, names);
-    if (this.gatewayRequired && !this.store.get('SELECT id FROM runtime_credentials WHERE id=?', id)) throw new Fault(503, 'runtime_credential_required');
+    if (this.gatewayRequired && !team && !this.store.get('SELECT id FROM runtime_credentials WHERE id=?', id)) throw new Fault(503, 'runtime_credential_required');
     if (this.disks) {
       this.backups.recover(id);
       const volume = await this.inspect('volume', names.volume);
@@ -153,7 +180,7 @@ export class DockerRuntime {
       }
       mkdirSync(names.edge, { recursive: true, mode: 0o700 }); chownSync(names.edge, 1001, 1001); chmodSync(names.edge, 0o700);
       this.writeGateway(id, names.edge);
-      await this.docker(['container', 'create', '--name', names.container, ...labels, '--init', '--user', '1001:1001', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--memory', '2g', '--memory-swap', '2g', '--cpus', '1', '--pids-limit', '256', '--shm-size', '512m', '--network', this.egress ? names.network : 'none', ...(this.egress ? this.egress.dns.flatMap(ip => ['--dns', ip]) : []), '--restart', 'no', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m,mode=1777', '--tmpfs', '/run:rw,nosuid,nodev,size=8m,mode=755', '--mount', `type=volume,src=${names.volume},dst=/data`, '--mount', `type=bind,src=${names.edge},dst=/run/donebot`, '--env', 'DONEBOT_TUNNEL_SOCKET=/run/donebot/http.sock', '--env', 'DONEBOT_PORT=18899', '--env', 'DONEBOT_WEBHOOK_PORT=18900', ...(this.gatewayRequired ? ['--env', 'DONEBOT_CLOUD_CREDENTIAL_FILE=/run/donebot/gateway.json'] : []), ...(this.desktops ? ['--env', 'DONEBOT_CLOUD_DESKTOP_SOCKET=/run/donebot/cloud-desktop.sock'] : []), this.image]);
+      await this.docker(['container', 'create', '--name', names.container, ...labels, '--init', '--user', '1001:1001', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--memory', `${limits.memory_mib}m`, '--memory-swap', `${limits.memory_mib}m`, '--cpus', String(limits.cpu_millis / 1000), '--pids-limit', String(limits.pids), '--shm-size', '512m', '--network', this.egress ? names.network : 'none', ...(this.egress ? this.egress.dns.flatMap(ip => ['--dns', ip]) : []), '--restart', 'no', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m,mode=1777', '--tmpfs', '/run:rw,nosuid,nodev,size=8m,mode=755', '--mount', `type=volume,src=${names.volume},dst=/data`, '--mount', `type=bind,src=${names.edge},dst=/run/donebot`, '--env', 'DONEBOT_TUNNEL_SOCKET=/run/donebot/http.sock', '--env', 'DONEBOT_PORT=18899', '--env', 'DONEBOT_WEBHOOK_PORT=18900', ...(team ? teamEnvironment(team).flatMap(entry => ['--env', entry]) : this.gatewayRequired ? ['--env', 'DONEBOT_CLOUD_CREDENTIAL_FILE=/run/donebot/gateway.json'] : []), ...(this.desktops ? ['--env', 'DONEBOT_CLOUD_DESKTOP_SOCKET=/run/donebot/cloud-desktop.sock'] : []), this.image]);
       container = await this.inspect('container', names.container); this.checkContainer(container, id, names);
     }
     if (this.disks) this.checkVolume(await this.inspect('volume', names.volume), id);
@@ -163,11 +190,12 @@ export class DockerRuntime {
     const deadline = Date.now() + this.healthTimeoutMs;
     while (Date.now() < deadline) {
       let pinned;
-      try { pinned = this.pinSocket(id); const health = await socketJSON(pinned.socketPath, '/api/health', 'GET', undefined, 2000); if (health.app === 'donebot') break; } catch { /* The socket appears after DoneBot initializes. */ }
+      try { pinned = this.pinSocket(id); const health = await socketJSON(pinned.socketPath, '/api/health', 'GET', undefined, 2000); if (health.app === 'donebot' && (!team || health.team_protocol === TEAM_PROTOCOL && health.ready === true)) break; } catch { /* The socket appears after DoneBot initializes. */ }
       finally { pinned?.release(); }
       await new Promise(resolve => setTimeout(resolve, 250));
     }
     if (Date.now() >= deadline) throw new Fault(504, 'instance_health_timeout');
+    if (team) return { socketPath: names.socketPath, team, expiresAt: Number.MAX_SAFE_INTEGER };
     const saved = this.store.get('SELECT value FROM credentials WHERE id=?', id);
     let credential = saved ? this.store.vault.open(saved.value) : null;
     if (credential && credential.expiresAt > Date.now() + 60000) {
@@ -211,11 +239,12 @@ export class DockerRuntime {
     if (!container) throw new Fault(404, 'instance_not_found');
     this.checkContainer(container, id, names);
     const volume = await this.inspect('volume', names.volume); this.checkVolume(volume, id);
-    const result = { cpu_cores: 1, memory_bytes: 2147483648, pids: 256, storage: { enforced: !!this.disks, limit_bytes: this.disks?.bytesFor(id) ?? null } };
+    const team = this.teamConfiguration(id), limits = team?.runtime || PERSONAL_RUNTIME;
+    const result = { cpu_cores: limits.cpu_millis / 1000, memory_bytes: limits.memory_mib * 1024 ** 2, pids: limits.pids, storage: { enforced: !!this.disks, limit_bytes: this.disks?.bytesFor(id) ?? null } };
     if (this.desktops) {
       result.desktop = this.desktops.resources(id);
       result.total = { cpu_cores: result.cpu_cores + result.desktop.cpu_cores, memory_bytes: result.memory_bytes + result.desktop.memory_bytes,
-        storage: { enforced: !!this.disks, limit_bytes: result.storage.limit_bytes + result.desktop.storage.limit_bytes, maximum_bytes: CLOUD_STORAGE_MAX_BYTES } };
+        storage: { enforced: !!this.disks, limit_bytes: result.storage.limit_bytes + result.desktop.storage.limit_bytes, maximum_bytes: team ? (team.runtime.storage_gib + team.desktop.storage_gib) * 1024 ** 3 : CLOUD_STORAGE_MAX_BYTES } };
     }
     if (this.disks && container.State.Running) {
       const stat = statfsSync(volume.Mountpoint);
@@ -230,7 +259,8 @@ export class DockerRuntime {
       await this.docker(['version', '--format', '{{.Server.Version}}']);
       const filesystem = statfsSync(this.stateDir), available = filesystem.bavail * filesystem.bsize;
       const desktop = this.desktops ? await this.desktops.imageReady() : true;
-      return { ready: available > 512 * 1024 ** 2 && desktop, docker: true, desktop_image_ready: desktop, disk_available_bytes: available };
+      const team = this.teamsEnabled && (await this.inspect('image', this.image))?.Config?.Labels?.['cn.donebot.teams.protocol'] === TEAM_PROTOCOL;
+      return { ready: available > 512 * 1024 ** 2 && desktop, docker: true, desktop_image_ready: desktop, ...(team ? { team_protocol: TEAM_PROTOCOL } : {}), disk_available_bytes: available };
     } catch { return { ready: false, docker: false }; }
   }
   async purge(id) {
@@ -251,6 +281,7 @@ export class DockerRuntime {
     rmSync(names.edge, { recursive: true, force: true });
     this.store.run('DELETE FROM credentials WHERE id=?', id);
     this.store.run('DELETE FROM runtime_credentials WHERE id=?', id);
+    this.store.run('DELETE FROM team_runtimes WHERE id=?', id);
   }
   close() { if (this.desktops) return this.desktops.close().then(() => this.store.close()); this.store.close(); }
 }

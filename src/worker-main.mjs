@@ -9,6 +9,7 @@ const worker = await createWorker({
   agentSocket: resolve(process.env.CLOUD_AGENT_SOCKET || '.local/agent/agent.sock'),
   host: process.env.CLOUD_WORKER_HOST || '127.0.0.1', port: Number(process.env.CLOUD_WORKER_PORT || 18991),
   development: process.env.CLOUD_MODE === 'development',
+  teamsEnabled: process.env.CLOUD_TEAMS_ENABLED === '1',
 });
 console.log(JSON.stringify({ app: 'donebot-cloud-worker', origin: worker.origin }));
 let closing = false;

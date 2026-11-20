@@ -6,8 +6,9 @@ import { Fault, body, close, hash, instanceID, json, listen, privateDir, socketJ
 import { httpProxy, proxyHeaders, safePath, wsProxy, wsServer } from './proxy.mjs';
 import { errorFields, masterFailure } from './worker-errors.mjs';
 import { readRunLeases, runLeaseValid, runLeaseUntil } from './run-lease.mjs';
+import { TEAM_PROTOCOL } from './team-runtime.mjs';
 
-export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey, stateDir, agentSocket, host = '127.0.0.1', port = 18991, development = false, pollMs = 3000, runtimeCredentials = !development, log = entry => console.log(JSON.stringify(entry)) }) {
+export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey, stateDir, agentSocket, host = '127.0.0.1', port = 18991, development = false, pollMs = 3000, runtimeCredentials = !development, teamsEnabled = false, log = entry => console.log(JSON.stringify(entry)) }) {
   instanceID(nodeId); const url = new URL(masterOrigin);
   if (url.origin !== masterOrigin || url.protocol !== 'https:' && !(development && url.protocol === 'http:' && url.hostname === '127.0.0.1')) throw new Error('worker requires an HTTPS master origin');
   const rawKey = Buffer.from(publicKey, 'base64'); if (rawKey.length !== 32 || typeof nodeToken !== 'string' || nodeToken.length < 32) throw new Error('invalid worker enrollment');
@@ -24,7 +25,17 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
   const execute = async (id, action) => {
     const lease = leases.get(id);
     const value = action === 'start' || action === 'lease' ? { authorized_until: lease && runLeaseUntil(lease) } : {};
-    if (action === 'start' && runtimeCredentials) value.gateway = await call('runtime-credential', { instance_id: instanceID(id) });
+    if (action === 'start' && runtimeCredentials) {
+      if (teamsEnabled) {
+        const configuration = await call('runtime-configuration', { instance_id: instanceID(id) });
+        if (!configuration || Boolean(configuration.gateway) === Boolean(configuration.team)) throw new Fault(502, 'invalid_runtime_configuration');
+        if (configuration.team) {
+          const health = await socketJSON(agentSocket, '/healthz', 'GET', undefined, 3000);
+          if (!health.ready || health.team_protocol !== TEAM_PROTOCOL) throw new Fault(503, 'team_runtime_unsupported');
+          value.team = configuration.team;
+        } else value.gateway = configuration.gateway;
+      } else value.gateway = await call('runtime-credential', { instance_id: instanceID(id) });
+    }
     if (action === 'start') needsStop.add(id);
     const result = await socketJSON(agentSocket, `/v1/instances/${instanceID(id)}/${action}`, 'POST', value);
     if (action === 'stop' || action === 'purge') { needsStop.delete(id); started.delete(id); uptimes.delete(id); recoveries.delete(id); }
@@ -81,11 +92,11 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
       const master = Date.now() - lastMasterContact < 30000, ready = !stopped && agent && master;
       return json(res, ready ? 200 : 503, { ready, master, agent });
     }
-    try { const { id, origin } = grant(req), headers = proxyHeaders(req, origin); headers['x-cloud-origin'] = origin; httpProxy(req, res, { socketPath: agentSocket, path: req.url }, headers, track(id)); }
+    try { const { id, origin } = grant(req), headers = proxyHeaders(req, origin); headers['x-cloud-origin'] = origin; if (teamsEnabled && typeof req.headers['x-donebot-team-grant'] === 'string') headers['x-donebot-team-grant'] = req.headers['x-donebot-team-grant']; httpProxy(req, res, { socketPath: agentSocket, path: req.url }, headers, track(id)); }
     catch (e) { res.writeHead(e.status || 503, { 'cache-control': 'no-store' }); res.end(); }
   });
   server.on('upgrade', (req, socket, head) => {
-    try { const { id, origin } = grant(req), headers = proxyHeaders(req, origin); headers['x-cloud-origin'] = origin; wsProxy(wss, req, socket, head, { socketPath: agentSocket, path: req.url }, headers, track(id)); }
+    try { const { id, origin } = grant(req), headers = proxyHeaders(req, origin); headers['x-cloud-origin'] = origin; if (teamsEnabled && typeof req.headers['x-donebot-team-grant'] === 'string') headers['x-donebot-team-grant'] = req.headers['x-donebot-team-grant']; wsProxy(wss, req, socket, head, { socketPath: agentSocket, path: req.url }, headers, track(id)); }
     catch (e) { socket.end(`HTTP/1.1 ${e.status || 503} Rejected\r\nConnection: close\r\n\r\n`); }
   });
   const address = await listen(server, { host, port });
@@ -124,7 +135,9 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
         }
       }
       const claimStarted = Date.now(), monotonicStarted = performance.now();
-      const response = await call('claim', { running: current ? [{ operation_id: current.op.id, lease_token: current.op.lease_token }] : [] });
+      const health = teamsEnabled ? await socketJSON(agentSocket, '/healthz', 'GET', undefined, 3000) : null;
+      const response = await call('claim', { running: current ? [{ operation_id: current.op.id, lease_token: current.op.lease_token }] : [],
+        ...(teamsEnabled ? { team_protocol: health?.ready && health.team_protocol === TEAM_PROTOCOL ? TEAM_PROTOCOL : '' } : {}) });
       if (stopped) return;
       const renewed = readRunLeases(response, claimStarted, monotonicStarted);
       lastMasterContact = Date.now();

@@ -8,11 +8,11 @@ import { RUNTIME_STORAGE_BYTES } from './resource-limits.mjs';
 const execute = promisify(execFile);
 
 export class BoundedDisks {
-  constructor({ stateDir, store, bytes = RUNTIME_STORAGE_BYTES, owner = 1001 }) {
+  constructor({ stateDir, store, bytes = RUNTIME_STORAGE_BYTES, owner = 1001, limitFor }) {
     if (process.platform !== 'linux' || process.getuid() !== 0) throw new Error('bounded-ext4 storage requires a local root Linux agent');
     if (!Number.isSafeInteger(bytes) || bytes < 128 * 1024 ** 2 || bytes > 1024 ** 4 || bytes % (1024 ** 2)) throw new Error('storage size must be 128 MiB–1 TiB in whole MiB');
     if (![1000, 1001].includes(owner)) throw new Error('invalid storage owner');
-    this.dir = privateDir(join(stateDir, 'disks')); this.store = store; this.bytes = bytes; this.owner = owner;
+    this.dir = privateDir(join(stateDir, 'disks')); this.store = store; this.bytes = bytes; this.owner = owner; this.limitFor = limitFor;
     store.db.exec('CREATE TABLE IF NOT EXISTS disks(id TEXT PRIMARY KEY,bytes INTEGER NOT NULL,state TEXT NOT NULL)');
   }
   path(id) { return join(this.dir, instanceID(id) + '.ext4'); }
@@ -39,8 +39,8 @@ export class BoundedDisks {
   async unmount(id) { if (this.mounted(id)) await this.run('/usr/bin/umount', [this.mountPath(id)]); }
   bytesFor(id) {
     const saved = this.store.get('SELECT * FROM disks WHERE id=?', instanceID(id));
-    const bytes = saved?.bytes ?? this.bytes;
-    if (!Number.isSafeInteger(bytes) || bytes < 128 * 1024 ** 2 || bytes % (1024 ** 2) || bytes > this.bytes) throw new Fault(409, 'storage_spec_mismatch');
+    const limit = this.limitFor?.(id) ?? this.bytes, bytes = saved?.bytes ?? limit;
+    if (!Number.isSafeInteger(limit) || limit > 1024 ** 4 || !Number.isSafeInteger(bytes) || bytes < 128 * 1024 ** 2 || bytes % (1024 ** 2) || bytes > limit) throw new Fault(409, 'storage_spec_mismatch');
     return bytes;
   }
   check(id) {

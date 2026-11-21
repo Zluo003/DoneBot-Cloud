@@ -14,5 +14,6 @@ export function teamFixture() {
       runtime_hash: hash(`${method}\n${path}`), ...patch }));
     return bytes.toString('base64url') + '.' + sign(null, bytes, keys.privateKey).toString('base64url');
   };
-  return { ...keys, publicKey, id, team, grant };
+  const coordinator = { protocol: TEAM_PROTOCOL, instance_id: id, team_id: team.team_id, generation: 1, credential: 'dbtc_' + Buffer.alloc(32, 3).toString('base64url') };
+  return { ...keys, publicKey, id, team, grant, coordinator };
 }

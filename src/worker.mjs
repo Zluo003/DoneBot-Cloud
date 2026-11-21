@@ -6,7 +6,7 @@ import { Fault, body, close, hash, instanceID, json, listen, privateDir, socketJ
 import { httpProxy, proxyHeaders, safePath, wsProxy, wsServer } from './proxy.mjs';
 import { errorFields, masterFailure } from './worker-errors.mjs';
 import { readRunLeases, runLeaseValid, runLeaseUntil } from './run-lease.mjs';
-import { TEAM_PROTOCOL } from './team-runtime.mjs';
+import { TEAM_PROTOCOL, teamCoordinatorConfiguration } from './team-runtime.mjs';
 
 export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey, stateDir, agentSocket, host = '127.0.0.1', port = 18991, development = false, pollMs = 3000, runtimeCredentials = !development, teamsEnabled = false, log = entry => console.log(JSON.stringify(entry)) }) {
   instanceID(nodeId); const url = new URL(masterOrigin);
@@ -33,7 +33,12 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
           const health = await socketJSON(agentSocket, '/healthz', 'GET', undefined, 3000);
           if (!health.ready || health.team_protocol !== TEAM_PROTOCOL) throw new Fault(503, 'team_runtime_unsupported');
           value.team = configuration.team;
-        } else value.gateway = configuration.gateway;
+          value.coordinator = teamCoordinatorConfiguration(configuration.coordinator, configuration.team);
+          if (value.coordinator.generation !== lease?.generation) throw new Fault(403, 'team_coordinator_generation_mismatch');
+        } else {
+          if (configuration.coordinator) throw new Fault(502, 'invalid_runtime_configuration');
+          value.gateway = configuration.gateway;
+        }
       } else value.gateway = await call('runtime-credential', { instance_id: instanceID(id) });
     }
     if (action === 'start') needsStop.add(id);

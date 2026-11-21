@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DockerRuntime } from '../src/docker.mjs';
 import { BoundedDisks } from '../src/storage.mjs';
-import { TEAM_PROTOCOL, teamConfiguration, teamEnvironment, teamRequest } from '../src/team-runtime.mjs';
+import { TEAM_PROTOCOL, teamConfiguration, teamCoordinatorConfiguration, teamEnvironment, teamRequest } from '../src/team-runtime.mjs';
 import { teamFixture } from './team-fixtures.mjs';
 
 
@@ -45,7 +45,7 @@ test('host metadata persists purchased resources and prevents personal/team take
   await assert.rejects(runtime.configureTeam(f.id, { ...f.team, runtime: { ...f.team.runtime, memory_mib: 8192 } }), { code: 'team_runtime_spec_immutable' });
   await assert.rejects(runtime.configureTeam(f.id, { ...f.team, team_id: randomUUID() }), { code: 'team_runtime_spec_immutable' });
   assert.throws(() => runtime.configureGateway(f.id, {}), { code: 'team_personal_credential_forbidden' });
-  runtime.writeGateway(f.id, join(dir, 'missing-directory'));
+  assert.throws(() => runtime.writeGateway(f.id, join(dir, 'missing-directory')), { code: 'runtime_credential_required' });
   const personal = randomUUID();
   runtime.store.run('INSERT INTO runtime_credentials VALUES(?,?)', personal, 'synthetic');
   await assert.rejects(runtime.configureTeam(personal, { ...f.team, instance_id: personal }), { code: 'team_personal_credential_forbidden' });
@@ -54,6 +54,27 @@ test('host metadata persists purchased resources and prevents personal/team take
   await assert.rejects(runtime.configureTeam(other, { ...f.team, instance_id: other }), { code: 'team_runtime_scope_immutable' });
   runtime.teamsEnabled = false;
   await assert.rejects(runtime.configureTeam(f.id, f.team), { code: 'team_runtime_disabled' });
+});
+
+test('coordinator secrets are encrypted outside tenant data and fenced by instance generation', async t => {
+  const dir = await mkdtemp('/tmp/dbc-team-coordinator-'), f = teamFixture();
+  const runtime = new DockerRuntime({ stateDir: dir, image: 'fixture', development: true, teamsEnabled: true, teamPublicKey: f.publicKey });
+  t.after(async () => { runtime.store.close(); await rm(dir, { recursive: true, force: true }); });
+  runtime.inspect = async () => null;
+  assert.throws(() => runtime.configureTeamCoordinator(f.id, f.coordinator), { code: 'invalid_team_coordinator' });
+  await runtime.configureTeam(f.id, f.team);
+  for (const patch of [{ instance_id: randomUUID() }, { team_id: randomUUID() }, { generation: -1 }, { generation: 0.5 }, { protocol: 'future' }, { credential: 'sk-donebot-forbidden' }, { credential: 'dbtc_' + 'x'.repeat(43) }]) {
+    assert.throws(() => runtime.configureTeamCoordinator(f.id, { ...f.coordinator, ...patch }), { code: 'invalid_team_coordinator' });
+  }
+  runtime.configureTeamCoordinator(f.id, { ...f.coordinator, payer_id: 101 });
+  const saved = runtime.store.get('SELECT value FROM team_coordinators WHERE id=?', f.id).value;
+  assert.ok(!saved.includes(f.coordinator.credential));
+  assert.deepEqual(runtime.store.vault.open(saved), f.coordinator);
+  assert.deepEqual(teamCoordinatorConfiguration(f.coordinator, f.team), f.coordinator);
+  assert.ok(!JSON.stringify(teamEnvironment(f.team)).includes(f.coordinator.credential));
+  runtime.configureTeamCoordinator(f.id, { ...f.coordinator, generation: 2 });
+  assert.throws(() => runtime.configureTeamCoordinator(f.id, f.coordinator), { code: 'team_coordinator_generation_mismatch' });
+  assert.throws(() => runtime.configureTeamCoordinator(f.id, { ...f.coordinator, generation: 2, credential: 'dbtc_' + Buffer.alloc(32, 4).toString('base64url') }), { code: 'team_coordinator_generation_mismatch' });
 });
 
 test('team disks use per-instance limits and preserve existing smaller disks', async t => {

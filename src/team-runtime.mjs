@@ -28,7 +28,15 @@ export function teamConfiguration(value, id, pinnedKey) {
 export function teamEnvironment(value) {
   return [`DONEBOT_TEAM_RUNTIME=1`, `DONEBOT_TEAM_ID=${value.team_id}`, `DONEBOT_TEAM_NAME=${value.name}`,
     `DONEBOT_TEAM_INSTANCE_ID=${value.instance_id}`, `DONEBOT_TEAM_PUBLIC_KEY=${value.public_key}`,
-    `DONEBOT_TEAM_SHARED_QUOTA_BYTES=${value.shared_quota_bytes}`, `DONEBOT_TEAM_MAX_FILE_BYTES=${value.max_file_bytes}`];
+    `DONEBOT_TEAM_SHARED_QUOTA_BYTES=${value.shared_quota_bytes}`, `DONEBOT_TEAM_MAX_FILE_BYTES=${value.max_file_bytes}`,
+    'DONEBOT_TEAM_COORDINATOR_FILE=/run/donebot/team-coordinator.json'];
+}
+
+export function teamCoordinatorConfiguration(value, team) {
+  if (!team || !value || value.protocol !== TEAM_PROTOCOL || value.instance_id !== team.instance_id || value.team_id !== team.team_id ||
+      !integer(value.generation, 0, Number.MAX_SAFE_INTEGER) || typeof value.credential !== 'string' || !/^dbtc_[A-Za-z0-9_-]{43}$/.test(value.credential) ||
+      Buffer.from(value.credential.slice(5), 'base64url').toString('base64url') !== value.credential.slice(5)) throw new Fault(403, 'invalid_team_coordinator');
+  return { protocol: TEAM_PROTOCOL, instance_id: team.instance_id, team_id: team.team_id, generation: value.generation, credential: value.credential };
 }
 // Grants are bound to the inner runtime URI; a trusted proxy must never replace them with an owner session.
 export function teamRequest(value, req, path, now = Date.now()) {

@@ -11,7 +11,7 @@ import { Backups } from './backups.mjs';
 import { CloudDesktops } from './desktops.mjs';
 import { InstanceBackups } from './instance-backups.mjs';
 import { cloudStorageLimits, CLOUD_STORAGE_MAX_BYTES } from './resource-limits.mjs';
-import { PERSONAL_RUNTIME, TEAM_PROTOCOL, teamConfiguration, teamEnvironment, teamPublicKey } from './team-runtime.mjs';
+import { PERSONAL_RUNTIME, TEAM_PROTOCOL, teamConfiguration, teamCoordinatorConfiguration, teamEnvironment, teamPublicKey } from './team-runtime.mjs';
 
 const execute = promisify(execFile);
 // Executed only by the host agent, with no user-supplied command or arguments.
@@ -37,6 +37,7 @@ export class DockerRuntime {
     this.store.db.exec('CREATE TABLE IF NOT EXISTS credentials(id TEXT PRIMARY KEY,value TEXT NOT NULL)');
     this.store.db.exec('CREATE TABLE IF NOT EXISTS runtime_credentials(id TEXT PRIMARY KEY,value TEXT NOT NULL)');
     this.store.db.exec('CREATE TABLE IF NOT EXISTS team_runtimes(id TEXT PRIMARY KEY,value TEXT NOT NULL)');
+    this.store.db.exec('CREATE TABLE IF NOT EXISTS team_coordinators(id TEXT PRIMARY KEY,value TEXT NOT NULL)');
     this.egress = egress === 'none' ? null : new Egress({ namespace: this.namespace, store: this.store, dns: egressDNS, denyIPv4: egressDenyIPv4, gatewayIPv4, binary: nftBinary });
     if (!['volume', 'bounded-ext4'].includes(storage)) throw new Error('invalid storage mode');
     if (storage === 'bounded-ext4' && !/^unix:\/\/\//.test(process.env.DOCKER_HOST || 'unix:///var/run/docker.sock')) throw new Error('bounded storage requires local Docker');
@@ -117,17 +118,29 @@ export class DockerRuntime {
     if (await this.inspect('container', names.container) || await this.inspect('volume', names.volume)) throw new Fault(409, 'team_runtime_scope_immutable');
     this.store.run('INSERT INTO team_runtimes VALUES(?,?)', id, JSON.stringify(clean));
   }
+  configureTeamCoordinator(id, value) {
+    if (!this.teamsEnabled) throw new Fault(503, 'team_runtime_disabled');
+    const clean = teamCoordinatorConfiguration(value, this.teamConfiguration(id));
+    const saved = this.store.get('SELECT value FROM team_coordinators WHERE id=?', id);
+    if (saved) {
+      const before = teamCoordinatorConfiguration(this.store.vault.open(saved.value), this.teamConfiguration(id));
+      if (clean.generation < before.generation || clean.generation === before.generation && clean.credential !== before.credential) throw new Fault(409, 'team_coordinator_generation_mismatch');
+    }
+    this.store.run('INSERT OR REPLACE INTO team_coordinators VALUES(?,?)', id, this.store.vault.seal(clean));
+  }
   writeGateway(id, edge) {
-    if (this.teamConfiguration(id)) return;
-    const saved = this.store.get('SELECT value FROM runtime_credentials WHERE id=?', id);
-    if (!saved) { if (this.gatewayRequired) throw new Fault(503, 'runtime_credential_required'); return; }
+    const team = this.teamConfiguration(id);
+    const saved = this.store.get(team ? 'SELECT value FROM team_coordinators WHERE id=?' : 'SELECT value FROM runtime_credentials WHERE id=?', id);
+    if (!saved) { if (team || this.gatewayRequired) throw new Fault(503, 'runtime_credential_required'); return; }
+    const value = this.store.vault.open(saved.value);
+    if (team) teamCoordinatorConfiguration(value, team);
     const temporary = join(edge, '.gateway-' + randomUUID());
     const fd = openSync(temporary, 'wx', 0o600);
     try {
-      try { writeFileSync(fd, JSON.stringify(this.store.vault.open(saved.value))); fchownSync(fd, 1001, 1001); }
+      try { writeFileSync(fd, JSON.stringify(value)); fchownSync(fd, 1001, 1001); }
       finally { closeSync(fd); }
       // The tenant can replace files inside this directory; rename never follows its symlink.
-      renameSync(temporary, join(edge, 'gateway.json'));
+      renameSync(temporary, join(edge, team ? 'team-coordinator.json' : 'gateway.json'));
     } finally { rmSync(temporary, { force: true }); }
   }
   async recover() {
@@ -282,6 +295,7 @@ export class DockerRuntime {
     this.store.run('DELETE FROM credentials WHERE id=?', id);
     this.store.run('DELETE FROM runtime_credentials WHERE id=?', id);
     this.store.run('DELETE FROM team_runtimes WHERE id=?', id);
+    this.store.run('DELETE FROM team_coordinators WHERE id=?', id);
   }
   close() { if (this.desktops) return this.desktops.close().then(() => this.store.close()); this.store.close(); }
 }

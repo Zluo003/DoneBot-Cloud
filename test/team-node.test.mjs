@@ -12,9 +12,9 @@ import { createWorker } from '../src/worker.mjs';
 import { TEAM_PROTOCOL, teamRequest } from '../src/team-runtime.mjs';
 import { teamFixture } from './team-fixtures.mjs';
 
-async function nodeFixture(t, { enabled = true, protocol = TEAM_PROTOCOL } = {}) {
+async function nodeFixture(t, { enabled = true, protocol = TEAM_PROTOCOL, coordinatorPatch = {} } = {}) {
   const f = teamFixture(), dir = await mkdtemp('/tmp/dbc-team-node-'), nodeId = randomUUID(), logs = [], claims = [], seen = [];
-  let active = false, starts = 0, configurations = 0, advertise = protocol, authorized = true, configuration = { team: f.team };
+  let active = false, starts = 0, configurations = 0, advertise = protocol, authorized = true, configuration = { team: f.team, coordinator: { ...f.coordinator, ...coordinatorPatch } };
   const runtimeSocket = join(dir, 'runtime.sock'), agentSocket = join(dir, 'agent.sock');
   const server = createServer((req, res) => {
     try {
@@ -32,6 +32,7 @@ async function nodeFixture(t, { enabled = true, protocol = TEAM_PROTOCOL } = {})
   const runtime = {
     health: async () => ({ ready: true, team_protocol: advertise }),
     configureTeam: async (id, value) => { assert.equal(id, f.id); assert.deepEqual(value, f.team); configurations++; },
+    configureTeamCoordinator: async (id, value) => { assert.equal(id, f.id); assert.deepEqual(value, f.coordinator); },
     start: async () => { active = true; starts++; return { socketPath: runtimeSocket, team: f.team, expiresAt: Number.MAX_SAFE_INTEGER }; },
     status: async () => ({ state: active ? 'running' : 'stopped' }), stop: async () => { active = false; },
     resources: async () => ({ cpu_cores: 2 }), backups: { list: () => [], remove: () => {}, create: async () => ({ id: randomUUID() }) },
@@ -76,6 +77,8 @@ test('worker and agent preserve actual member identity across HTTP and WebSocket
   const response = await f.proxy('/api/bots?limit=1'); assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { user_id: '303', role: 'member' });
   assert.equal(f.seen[0].bearer, undefined); assert.equal(f.seen[0].cookie, undefined);
+  assert.ok(!JSON.stringify(f.logs).includes(f.coordinator.credential));
+  assert.ok(!JSON.stringify(f.seen).includes(f.coordinator.credential));
   assert.equal((await f.proxy('/api/bots', 'member', 'GET', { team_id: randomUUID() })).status, 401);
   const route = '/api/events?cursor=socket', socket = new WebSocket(f.worker.origin.replace('http:', 'ws:') + `/v1/instances/${f.id}/proxy${route}`, { headers: f.headers(route) });
   await new Promise((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
@@ -100,6 +103,17 @@ test('default-off workers refuse team provisioning and do not advertise the prot
   const f = await nodeFixture(t, { enabled: false });
   await f.until(() => f.logs.some(row => row.event === 'operation_failed'));
   assert.equal(f.claims[0].team_protocol, undefined); assert.equal(f.starts, 0);
+});
+
+test('workers reject mismatched coordinator identity and old runtime generation before starting a team', async t => {
+  for (const patch of [{ generation: 0 }, { instance_id: randomUUID() }, { team_id: randomUUID() }, { credential: undefined }]) {
+    await t.test(JSON.stringify(patch), async child => {
+      const f = await nodeFixture(child, { coordinatorPatch: patch });
+      await f.until(() => f.logs.some(row => row.event === 'operation_failed'));
+      assert.equal(f.starts, 0);
+      assert.ok(!JSON.stringify(f.logs).includes('dbtc_'));
+    });
+  }
 });
 
 test('capability claims downgrade with the agent and ambiguous configurations never start', async t => {

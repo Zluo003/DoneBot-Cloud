@@ -65,10 +65,11 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
         const result = await serial(id, async () => {
           if (action === 'start') {
             if (!authorized(id)) throw new Fault(403, 'runtime_lease_expired');
-            if (input.team !== undefined && input.gateway !== undefined) throw new Fault(400, 'ambiguous_runtime_scope');
+            if (input.team !== undefined && input.gateway !== undefined || input.coordinator !== undefined && input.team === undefined) throw new Fault(400, 'ambiguous_runtime_scope');
             if (input.team !== undefined) {
-              if (!runtime.configureTeam) throw new Fault(503, 'team_runtime_unsupported');
+              if (!runtime.configureTeam || !runtime.configureTeamCoordinator) throw new Fault(503, 'team_runtime_unsupported');
               await runtime.configureTeam(id, input.team);
+              await runtime.configureTeamCoordinator(id, input.coordinator);
             }
             if (input.gateway !== undefined) {
               if (!runtime.configureGateway) throw new Fault(503, 'runtime_gateway_unsupported');

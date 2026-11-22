@@ -99,25 +99,25 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 
 #### 已发布的 amd64 镜像
 
-当前推荐为 2026-11-22 完成的 [x64 API 专用双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44996944403)。本次发布对应网关 Release [v0.4.56](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.56)（含迁移 `279_donebot_cloud_bot_links.sql`），在 OpenMausBot v0.1.173 阶段升级能力与默认关闭的 `donebot.teams.v1` 团队隔离框架基础上，新增本机与个人 Cloud 双向跨端群聊成员能力（Cloud Owner 列出对端 Bot、Chief 跨端建群/管群、`farMembers` 返回外观信息），并保留既有的设备命名、产物列表、四类附件交付、手机断点续传、HTTP 中断防护及 Muse 10 秒能力。[发布与注册表核验记录](verification/images-2026-11-22-bot-link-rooms-amd64.json)保留源码、不可变摘要、匿名注册表核验与真实 Linux 验证结果。历史文件仅供核对与回退，不是本次升级目标。
+当前推荐为 2026-11-22 完成的 [x64 API 专用双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/45001646589)。本次发布对应网关 Release [v0.4.57](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.57)，在既有个人 Cloud 协作、双向跨端群聊与 OpenMausBot v0.1.173 能力基础上，完成团队协作全链路接入（团队 Cloud 子域浏览器/桌面 Launch、能力协商、网页端团队控制台、桌面多团队 Cloud 切换与本机设备授权、原版团队模板库、团队容器文件/模板/执行开关透传及手机端团队工作空间代理），团队能力仍默认关闭。[发布与注册表核验记录](verification/images-2026-11-22-teams-amd64.json)保留源码、不可变摘要、匿名注册表核验与真实 Linux 验证结果（含 `verify-team-linux.mjs` fail-closed 证据）。历史文件仅供核对与回退，不是本次升级目标。
 
-DoneBot 源码固定为 `89af05babccf8600003b7706b8e815ae55421e02`，Cloud 验证代码为 `d344992546134f6dbcb27acb80d696fa97cec926`。两镜像已通过真实双用户服务隔离、受控出网及专属桌面验证，并匿名核对公开注册表清单、配置、平台和 `cn.donebot.teams.protocol=donebot.teams.v1` 标签；平台为 `linux/amd64`，不要用于 ARM64 节点。
+DoneBot 源码固定为 `fa2e2abeb02d02bd80454504dce7a3e1fe12cc0c`，Cloud 验证代码为 `afa648014d5c97309ff06bce4b324e7c39797b27`。两镜像已通过真实双用户服务隔离、受控出网及专属桌面验证，并匿名核对公开注册表清单、配置、平台和 `cn.donebot.teams.protocol=donebot.teams.v1` 标签；平台为 `linux/amd64`，不要用于 ARM64 节点。
 
-默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-bot-link-rooms-amd64.env](../deploy/images/2026-11-22-bot-link-rooms-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
+默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-teams-amd64.env](../deploy/images/2026-11-22-teams-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
 
 ```dotenv
-CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:25d8629d9f73c22b44b8f3753cf66aaa4137bdffb1092e42dcd4fa90d3efa243
-CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:54b50e479da5f69a6f5d97ccdb3ec3c1f42ad01eb6e764ddb4bacbb2d79e9343
+CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:1a6dd3ed3614c8dce27cb4963dddb40c9cbeeef32e244c3dafc623e7423d6e23
+CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:31140be7a445768d76281df6f5816a578578d7b0cec74caaa01414f259cb8ee3
 ```
 
 在 amd64 节点直接在线拉取，无需上传离线包或在节点编译 DoneBot：
 
 ```sh
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:25d8629d9f73c22b44b8f3753cf66aaa4137bdffb1092e42dcd4fa90d3efa243
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:54b50e479da5f69a6f5d97ccdb3ec3c1f42ad01eb6e764ddb4bacbb2d79e9343
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:1a6dd3ed3614c8dce27cb4963dddb40c9cbeeef32e244c3dafc623e7423d6e23
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:31140be7a445768d76281df6f5816a578578d7b0cec74caaa01414f259cb8ee3
 ```
 
-镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应更新至 `d344992546134f6dbcb27acb80d696fa97cec926` 或后续兼容版本（包含本机与 Cloud 协作 `bot-link` 代理透传）并重启 `donebot-cloud-agent` 与 `donebot-cloud-worker`；已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。个人 Cloud 资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费、真实 Linux 团队用户命名空间沙箱或目标节点状态。
+镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应更新至 `afa648014d5c97309ff06bce4b324e7c39797b27` 或后续兼容版本并重启 `donebot-cloud-agent` 与 `donebot-cloud-worker`；已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。个人 Cloud 资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费、真实 Linux 团队用户命名空间沙箱通过或目标节点状态。
 
 #### 团队运行时开关（默认关闭）
 

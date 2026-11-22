@@ -69,25 +69,29 @@ test('container security options enforce strict separation between personal and 
   assert.equal(checkContainerSecurityOpts(['no-new-privileges'], null), true);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`], null), false);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', 'seccomp=unconfined'], null), false);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges', 'systempaths=unconfined'], null), false);
 
-  // Team containers require exact seccomp (by path or daemon-inlined JSON) and AppArmor when enabled.
+  // Team containers require exact seccomp (by path or daemon-inlined JSON), enforce AppArmor, and compensated systempaths.
   assert.deepEqual(teamSecurityArgs(withAppArmor), [
     '--security-opt', 'no-new-privileges',
     '--security-opt', `seccomp=${seccomp.path}`,
     '--security-opt', 'apparmor=donebot-team-container',
+    '--security-opt', 'systempaths=unconfined',
   ]);
   assert.throws(() => teamSecurityArgs(missingAppArmor), { code: 'team_apparmor_profile_missing' });
-  assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=donebot-team-container'], withAppArmor), true);
-  assert.equal(checkContainerSecurityOpts(['no-new-privileges:true', `seccomp=${rawJson}`, 'apparmor=donebot-team-container'], withAppArmor), true);
-  assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=unconfined'], withAppArmor), false);
-  assert.equal(checkContainerSecurityOpts(['no-new-privileges', 'seccomp=unconfined', 'apparmor=donebot-team-container'], withAppArmor), false);
-  assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`], withAppArmor), false);
-  assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`], withoutAppArmor), true);
+  assert.throws(() => teamSecurityArgs(withoutAppArmor), { code: 'team_apparmor_profile_missing' });
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=donebot-team-container', 'systempaths=unconfined'], withAppArmor), true);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges:true', `seccomp=${rawJson}`, 'apparmor=donebot-team-container', 'systempaths=unconfined'], withAppArmor), true);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=donebot-team-container'], withAppArmor), false);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=unconfined', 'systempaths=unconfined'], withAppArmor), false);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges', 'seccomp=unconfined', 'apparmor=donebot-team-container', 'systempaths=unconfined'], withAppArmor), false);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'systempaths=unconfined'], withAppArmor), false);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=donebot-team-container', 'systempaths=unconfined'], withoutAppArmor), false);
 
   assert.equal(resolveTeamSecurityConfig({ teamsEnabled: false }), null);
 });
 
-test('DockerRuntime health gates team_protocol on loaded host AppArmor profile when AppArmor is active', async t => {
+test('DockerRuntime health gates team_protocol on loaded host AppArmor profile', async t => {
   const dir = await mkdtemp('/tmp/dbc-team-aa-');
   const f = teamFixture();
   let appArmorState = { enabled: true, profileLoaded: false, profile: DEFAULT_TEAM_APPARMOR_PROFILE };
@@ -117,6 +121,6 @@ test('DockerRuntime health gates team_protocol on loaded host AppArmor profile w
   appArmorState = { enabled: false, profileLoaded: false, profile: DEFAULT_TEAM_APPARMOR_PROFILE };
   const noAppArmor = await runtime.health();
   assert.equal(noAppArmor.ready, true);
-  assert.equal(noAppArmor.team_apparmor_ready, true);
-  assert.equal(noAppArmor.team_protocol, TEAM_PROTOCOL);
+  assert.equal(noAppArmor.team_apparmor_ready, false);
+  assert.equal(noAppArmor.team_protocol, undefined);
 });

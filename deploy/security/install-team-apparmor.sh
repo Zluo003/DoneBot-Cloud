@@ -2,9 +2,12 @@
 set -euo pipefail
 
 # Installs and loads the minimal-privilege AppArmor profile for DoneBot Cloud team containers.
-# Derived directly from moby/profiles docker-default: preserves /proc, /sys, obsolete network
-# family, signal and ptrace isolation while lifting only mount/pivot_root (and userns/unix on
-# AppArmor 4+) required by unprivileged bubblewrap (bot-box) inside CAP_DROP=ALL containers.
+# Derived directly from moby/profiles docker-default:
+#   - lifts only mount/pivot_root (and userns/unix on AppArmor 4+) required by unprivileged
+#     bubblewrap (bot-box) inside CAP_DROP=ALL containers;
+#   - enforces kernel-level AppArmor denies for every Docker MaskedPaths and ReadonlyPaths entry
+#     so team containers can pass --security-opt systempaths=unconfined (required by Linux kernel
+#     mount_too_revealing() for unprivileged bwrap --proc /proc) without exposing /proc or /sys.
 # Compatible with Debian 12 (AppArmor 3.0.x) and Ubuntu 24.04+ (AppArmor 4.x).
 
 PROFILE_NAME="donebot-team-container"
@@ -32,8 +35,8 @@ if [[ -f /proc/sys/kernel/unprivileged_userns_clone ]]; then
 fi
 
 if [[ ! -f /sys/module/apparmor/parameters/enabled ]] || [[ "$(cat /sys/module/apparmor/parameters/enabled)" != "Y" ]]; then
-  echo "AppArmor is not active on this host; only team-seccomp.json is required."
-  exit 0
+  echo "error: Linux AppArmor LSM is not enabled on this host; team containers require AppArmor enforce mode to protect /proc and /sys" >&2
+  exit 1
 fi
 
 if ! command -v apparmor_parser >/dev/null 2>&1; then
@@ -100,22 +103,40 @@ RULES
 
   cat <<EOF
 
-  # Preserve docker-default /proc and /sys write protections.
+  # Preserve docker-default /proc and /sys protections AND enforce kernel-level denies for all
+  # Docker MaskedPaths and ReadonlyPaths entries across both the outer container and bwrap mounts.
   # PID directories (/proc/[1-9]*/**) remain writable by file, so bubblewrap can write uid_map/gid_map/setgroups.
   deny @{PROC}/* w,
   deny @{PROC}/{[^1-9/],[^1-9/][^0-9/],[^1-9s/][^0-9y/][^0-9s/],[^1-9/][^0-9/][^0-9/][^0-9/]*}/** w,
-  deny @{PROC}/sys/[^k]** w,
-  deny @{PROC}/sys/kernel/{?,??,[^s][^h][^m]**} w,
+  deny @{PROC}/sys/** w,
+  deny @{PROC}/bus/** w,
+  deny @{PROC}/fs/** w,
+  deny @{PROC}/irq/** w,
   deny @{PROC}/sysrq-trigger rwklx,
   deny @{PROC}/kcore rwklx,
+  deny @{PROC}/keys rwklx,
+  deny @{PROC}/latency_stats rwklx,
+  deny @{PROC}/timer_list rwklx,
+  deny @{PROC}/timer_stats rwklx,
+  deny @{PROC}/sched_debug rwklx,
+  deny @{PROC}/interrupts rwklx,
+  deny @{PROC}/acpi rwklx,
+  deny @{PROC}/acpi/** rwklx,
+  deny @{PROC}/asound rwklx,
+  deny @{PROC}/asound/** rwklx,
+  deny @{PROC}/scsi rwklx,
+  deny @{PROC}/scsi/** rwklx,
 
   deny /sys/[^f]*/** wklx,
   deny /sys/f[^s]*/** wklx,
   deny /sys/fs/[^c]*/** wklx,
   deny /sys/fs/c[^g]*/** wklx,
   deny /sys/fs/cg[^r]*/** wklx,
+  deny /sys/firmware rwklx,
   deny /sys/firmware/** rwklx,
+  deny /sys/devices/virtual/powercap rwklx,
   deny /sys/devices/virtual/powercap/** rwklx,
+  deny /sys/kernel/security rwklx,
   deny /sys/kernel/security/** rwklx,
 
   # Preserve docker-default signal and ptrace boundaries.

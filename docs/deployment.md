@@ -125,7 +125,8 @@ sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sh
 - 团队容器内的 `bot-box`（bubblewrap）需要在 `--user 1001:1001 --read-only --cap-drop ALL --security-opt no-new-privileges` 下创建非特权用户命名空间与命名空间内挂载，并在每个 Bot 子进程内叠加第二层 BPF seccomp 过滤器。Docker 默认配置会以 `userns-refused`（验证退出码 `2`、`/api/health` 返回 `503`）安全拦截。
 - **严禁**使用 `--privileged`、`CAP_SYS_ADMIN`、`seccomp=unconfined` 或 `apparmor=unconfined`。仅允许为**团队容器**加载仓库内提供的最小权限配置：
   - `deploy/security/team-seccomp.json`：基于官方 Moby 默认 seccomp（`SCMP_ACT_ERRNO` 默认拒绝），仅放行 `clone`、`unshare`、`mount`、`umount2`、`pivot_root`、`sethostname`，同时维持禁用 `bpf`、`ptrace`、`process_vm_*`、`add_key`、`keyctl`、`io_uring_*`、`kexec_*`、`init_module`、`chroot`、`setns`、`reboot` 等高危系统调用。`agent` 在启用团队能力时默认读取该文件（也可用 `CLOUD_TEAM_SECCOMP_PATH` 指定绝对路径只读副本）。
-  - `deploy/security/install-team-apparmor.sh`：基于官方 Moby `docker-default` 派生最小权限 AppArmor profile `donebot-team-container`（保留全部 `/proc`、`/sys`、废弃网络协议族、`AF_ALG`/`AF_VSOCK`、信号与 `ptrace` 限制，仅放行命名空间内 `mount`/`pivot_root` 及 AppArmor 4+ 所需的 `userns`/`unix`），自动兼容 **Debian 12（AppArmor 3.0.x）** 与 **Ubuntu 24.04+（AppArmor 4.x）**。
+  - `deploy/security/install-team-apparmor.sh`：基于官方 Moby `docker-default` 派生最小权限 AppArmor profile `donebot-team-container`（保留全部 `/proc`、`/sys`、废弃网络协议族、`AF_ALG`/`AF_VSOCK`、信号与 `ptrace` 限制，并在内核 LSM 层用显式 `deny rwklx` / `deny w` 接管 Docker 全部 `MaskedPaths` 与 `ReadonlyPaths`，仅放行命名空间内 `mount`/`pivot_root` 及 AppArmor 4+ 所需的 `userns`/`unix`），自动兼容 **Debian 12（AppArmor 3.0.x）** 与 **Ubuntu 24.04+（AppArmor 4.x）**。
+  - Linux 内核 `mount_too_revealing()` 要求 `/proc` 上不能有遮蔽覆盖挂载才允许非特权 `bwrap --proc /proc`，因此团队容器在且**仅在**宿主机已加载 `donebot-team-container (enforce)` 且通过最小权限 `team-seccomp.json` 校验时，附带 `--security-opt systempaths=unconfined`，由 `donebot-team-container` AppArmor LSM 规则跨命名空间强制承接全部 `/proc` 与 `/sys` 防护；未启用 AppArmor 或未加载该 profile 的宿主机禁止开启团队能力。
 
 在 **Debian 12**（或 Ubuntu）节点开启团队能力前的标准操作：
 
@@ -148,8 +149,7 @@ sudo node /path/to/verify-team-linux.mjs \
   --apparmor donebot-team-container
 ```
 
-- 如果某精简 Linux 宿主机内核未启用 AppArmor（`/sys/module/apparmor/parameters/enabled` 不为 `Y`），安装脚本会提示仅需 `team-seccomp.json`，上述验证命令省略 `--apparmor` 即可。
-- 宿主机启用 AppArmor 但未加载 `donebot-team-container (enforce)` 时，`agent` 健康检查自动返回 `team_apparmor_ready: false` 且不声明 `team_protocol`，启动团队容器会安全失败（`503 team_apparmor_profile_missing`）。
+- 宿主机未启用 Linux AppArmor LSM 或未加载 `donebot-team-container (enforce)` 时，`agent` 健康检查自动返回 `team_apparmor_ready: false` 且不声明 `team_protocol`，启动团队容器会安全失败（`503 team_apparmor_profile_missing`），绝不会在缺少 AppArmor 保护时启用 `systempaths=unconfined`。
 - 上述节点自检返回退出码 `0` 且网关侧显式开放团队能力后，在 `/etc/donebot-cloud/agent.env` 与 `/etc/donebot-cloud/worker.env` 同时设置 `CLOUD_TEAMS_ENABLED=1`，并在 `agent.env` 填入与 `worker.env` 相同的 `CLOUD_MASTER_PUBLIC_KEY`（主控 Ed25519 公钥），随后维护重启 `donebot-cloud-agent` 与 `donebot-cloud-worker` 即可。可选环境变量：`CLOUD_TEAM_SECCOMP_PATH`（默认仓库内 `deploy/security/team-seccomp.json`）、`CLOUD_TEAM_APPARMOR_PROFILE`（默认 `donebot-team-container`）。
 
 #### 始终读取当前推荐清单

@@ -83,39 +83,62 @@ export function hostAppArmorState(profile = DEFAULT_TEAM_APPARMOR_PROFILE) {
 }
 
 export function teamSecurityArgs(config) {
-  const args = ['--security-opt', 'no-new-privileges', '--security-opt', `seccomp=${config.seccomp.path}`];
-  if (config.appArmor.enabled) {
-    if (!config.appArmor.profileLoaded) throw new Fault(503, 'team_apparmor_profile_missing');
-    args.push('--security-opt', `apparmor=${config.appArmor.profile}`);
+  // Team containers require AppArmor enforce mode to compensate for systempaths=unconfined
+  // (needed by Linux kernel mount_too_revealing() so unprivileged bwrap can mount /proc).
+  if (!config.appArmor.enabled || !config.appArmor.profileLoaded) {
+    throw new Fault(503, 'team_apparmor_profile_missing');
   }
-  return args;
+  return [
+    '--security-opt', 'no-new-privileges',
+    '--security-opt', `seccomp=${config.seccomp.path}`,
+    '--security-opt', `apparmor=${config.appArmor.profile}`,
+    '--security-opt', 'systempaths=unconfined',
+  ];
 }
 
 export function checkContainerSecurityOpts(securityOpt, teamConfig) {
   const opts = Array.isArray(securityOpt) ? securityOpt : [];
   if (!opts.includes('no-new-privileges') && !opts.includes('no-new-privileges:true')) return false;
-  if (opts.some(opt => /(?:^|:|=)unconfined$/i.test(opt))) return false;
   if (!teamConfig) {
-    return !opts.some(opt => /^(?:seccomp|apparmor)[=:]/i.test(opt));
+    if (opts.some(opt => /(?:^|:|=)unconfined$/i.test(opt))) return false;
+    return !opts.some(opt => /^(?:seccomp|apparmor|systempaths|label)[=:]/i.test(opt));
   }
-  const seccompOpt = opts.find(opt => /^seccomp[=:]/i.test(opt));
-  if (!seccompOpt) return false;
-  const seccompVal = seccompOpt.slice('seccomp='.length);
-  if (seccompVal !== teamConfig.seccomp.path) {
-    try {
-      const digest = validateTeamSeccompDocument(JSON.parse(seccompVal));
-      if (digest !== teamConfig.seccomp.digest) return false;
-    } catch {
-      return false;
+  if (!teamConfig.appArmor.enabled || !teamConfig.appArmor.profileLoaded) return false;
+  let hasSeccomp = false;
+  let hasAppArmor = false;
+  let hasSystemPaths = false;
+  for (const opt of opts) {
+    if (opt === 'no-new-privileges' || opt === 'no-new-privileges:true') continue;
+    if (/^seccomp[=:]/i.test(opt)) {
+      if (hasSeccomp) return false;
+      const seccompVal = opt.slice('seccomp='.length);
+      if (/^unconfined$/i.test(seccompVal)) return false;
+      if (seccompVal !== teamConfig.seccomp.path) {
+        try {
+          const digest = validateTeamSeccompDocument(JSON.parse(seccompVal));
+          if (digest !== teamConfig.seccomp.digest) return false;
+        } catch {
+          return false;
+        }
+      }
+      hasSeccomp = true;
+      continue;
     }
-  }
-  const apparmorOpt = opts.find(opt => /^apparmor[=:]/i.test(opt));
-  if (teamConfig.appArmor.enabled) {
-    if (!apparmorOpt || apparmorOpt.slice('apparmor='.length) !== teamConfig.appArmor.profile) return false;
-  } else if (apparmorOpt) {
+    if (/^apparmor[=:]/i.test(opt)) {
+      if (hasAppArmor) return false;
+      const profileVal = opt.slice('apparmor='.length);
+      if (/^unconfined$/i.test(profileVal) || profileVal !== teamConfig.appArmor.profile) return false;
+      hasAppArmor = true;
+      continue;
+    }
+    if (opt === 'systempaths=unconfined' || opt === 'systempaths:unconfined') {
+      if (hasSystemPaths) return false;
+      hasSystemPaths = true;
+      continue;
+    }
     return false;
   }
-  return true;
+  return hasSeccomp && hasAppArmor && hasSystemPaths;
 }
 
 export function resolveTeamSecurityConfig({ teamsEnabled, seccompPath, appArmorProfile, readAppArmor = hostAppArmorState }) {

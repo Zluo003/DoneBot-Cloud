@@ -278,7 +278,7 @@ export class DockerRuntime {
       const filesystem = statfsSync(this.stateDir), available = filesystem.bavail * filesystem.bsize;
       const desktop = this.desktops ? await this.desktops.imageReady() : true;
       const appArmor = this.teamSecurity ? this.teamSecurity.readAppArmor(this.teamSecurity.profile) : null;
-      const appArmorReady = !appArmor || !appArmor.enabled || appArmor.profileLoaded;
+      const appArmorReady = !appArmor || (appArmor.enabled && appArmor.profileLoaded);
       const team = this.teamsEnabled && appArmorReady && (await this.inspect('image', this.image))?.Config?.Labels?.['cn.donebot.teams.protocol'] === TEAM_PROTOCOL;
       return { ready: available > 512 * 1024 ** 2 && desktop, docker: true, desktop_image_ready: desktop, ...(this.teamsEnabled ? { team_apparmor_ready: appArmorReady } : {}), ...(team ? { team_protocol: TEAM_PROTOCOL } : {}), disk_available_bytes: available };
     } catch { return { ready: false, docker: false }; }

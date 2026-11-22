@@ -91,7 +91,7 @@ jobs:
           # 2. Install minimal-privilege team AppArmor profile and verify full bot-box isolation passes (exit 0).
           sudo bash deploy/security/install-team-apparmor.sh
           set +e
-          node sources/DoneBot/scripts/verify-team-linux.mjs \
+          sudo env PATH="$PATH" node sources/DoneBot/scripts/verify-team-linux.mjs \
             --image "$CLOUD_DONEBOT_IMAGE" \
             --seccomp "$PWD/deploy/security/team-seccomp.json" \
             --apparmor donebot-team-container | tee "$BUNDLE/team-verification.jsonl"

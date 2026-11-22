@@ -99,25 +99,25 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 
 #### 已发布的 amd64 镜像
 
-当前推荐为 2026-11-22 完成的 [x64 API 专用双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/45006096648)。本次发布对应网关 Release [v0.4.57](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.57)，在团队协作全链路接入基础上，为 `cloud-service` 镜像补齐 `bot-box` 自检所需的 `python3`，并配套最小权限团队 seccomp / AppArmor 配置首次在真实 Linux 无特权只读容器环境下通过全部 32/32 `bot-box` 对抗隔离检查（退出码 `0`、`readiness.ready=true`），同时验证 Docker 默认配置维持退出码 `2` fail-closed；团队能力仍默认关闭。[发布与注册表核验记录](verification/images-2026-11-22-teams-box-amd64.json)保留源码、不可变摘要、匿名注册表核验与两轮团队 Linux 验证结果。历史文件仅供核对与回退，不是本次升级目标。
+当前推荐为 2026-11-22 完成的 [x64 API 专用双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/45009157303)。本次发布对应网关 Release [v0.4.57](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.57)，在最小权限团队 `bot-box` 32/32 隔离基础上，修复团队容器 `/api/config` 暴露已鉴权成员状态（解决成员进入团队空间被个人登录页拦截的问题）与团队模型目录同步重试，并保持团队能力默认关闭。[发布与注册表核验记录](verification/images-2026-11-22-teams-auth-amd64.json)保留源码、不可变摘要、匿名注册表核验与两轮团队 Linux 验证结果（含团队 `/api/config` `donebot.authenticated=true` 断言）。历史文件仅供核对与回退，不是本次升级目标。
 
-DoneBot 源码固定为 `e117b44e74eb67b610f8b4b8268294658e717a43`，Cloud 验证代码为 `6c847feaed2978a215310da954df5752c7882232`。两镜像已通过真实双用户服务隔离、受控出网、专属桌面以及团队最小权限 `bot-box` 32/32 隔离验证，并匿名核对公开注册表清单、配置、平台和 `cn.donebot.teams.protocol=donebot.teams.v1` 标签；平台为 `linux/amd64`，不要用于 ARM64 节点。
+DoneBot 源码固定为 `9820c6d81dcfddbf971d93c9ac096c602e034d01`，Cloud 验证代码为 `5ded677f7bab29f8d6ca389f37bec57d3c932c92`。两镜像已通过真实双用户服务隔离、受控出网、专属桌面以及团队最小权限 `bot-box` 32/32 隔离验证，并匿名核对公开注册表清单、配置、平台和 `cn.donebot.teams.protocol=donebot.teams.v1` 标签；平台为 `linux/amd64`，不要用于 ARM64 节点。
 
-默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-teams-box-amd64.env](../deploy/images/2026-11-22-teams-box-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
+默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-teams-auth-amd64.env](../deploy/images/2026-11-22-teams-auth-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
 
 ```dotenv
-CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:3c4983ead3ba11154fc2c0a2bb537aa2c6630a472eae966363e822503ccf6e47
-CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:a7ccc479457051adb041dff6a6429bc8d490150e0c3f52de41b92d833d30a955
+CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:7a9a942a670117d9403e3614508c4961fd4943359cb4b881cace1fd6bc25b236
+CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:2d08f5e23349034397deae3c5e95c12374420d25b9964ba1f78ae910458a5364
 ```
 
 在 amd64 节点直接在线拉取，无需上传离线包或在节点编译 DoneBot：
 
 ```sh
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:3c4983ead3ba11154fc2c0a2bb537aa2c6630a472eae966363e822503ccf6e47
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:a7ccc479457051adb041dff6a6429bc8d490150e0c3f52de41b92d833d30a955
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:7a9a942a670117d9403e3614508c4961fd4943359cb4b881cace1fd6bc25b236
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:2d08f5e23349034397deae3c5e95c12374420d25b9964ba1f78ae910458a5364
 ```
 
-镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应更新至 `6c847feaed2978a215310da954df5752c7882232` 或后续兼容版本并重启 `donebot-cloud-agent` 与 `donebot-cloud-worker`；已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。个人 Cloud 资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费或目标节点现场状态。
+镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应更新至 `5ded677f7bab29f8d6ca389f37bec57d3c932c92` 或后续兼容版本并重启 `donebot-cloud-agent` 与 `donebot-cloud-worker`；已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。个人 Cloud 资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费或目标节点现场状态。
 
 #### 团队运行时开关与最小权限沙箱配置（默认关闭）
 
@@ -137,7 +137,7 @@ sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sh
 sudo apt-get update && sudo apt-get install -y apparmor
 sudo systemctl enable --now apparmor
 
-# 1.2 更新受信节点代码至 6c847feaed2978a215310da954df5752c7882232 或更新提交
+# 1.2 更新受信节点代码至 5ded677f7bab29f8d6ca389f37bec57d3c932c92 或更新提交
 cd /opt/donebot-cloud
 sudo git pull --ff-only
 sudo npm ci --omit=dev
@@ -146,9 +146,9 @@ sudo npm ci --omit=dev
 sudo bash /opt/donebot-cloud/deploy/security/install-team-apparmor.sh
 sudo grep '^donebot-team-container (enforce)$' /sys/kernel/security/apparmor/profiles
 
-# 1.4 提前拉取最新已验证 amd64 双镜像（含 bot-box 自检所需的 python3）
-NEW_SERVICE="ghcr.io/zluo003/donebot-cloud-service@sha256:3c4983ead3ba11154fc2c0a2bb537aa2c6630a472eae966363e822503ccf6e47"
-NEW_DESKTOP="ghcr.io/zluo003/donebot-cloud-desktop@sha256:a7ccc479457051adb041dff6a6429bc8d490150e0c3f52de41b92d833d30a955"
+# 1.4 提前拉取最新已验证 amd64 双镜像（含 bot-box 自检所需的 python3 及团队 /api/config 鉴权修复）
+NEW_SERVICE="ghcr.io/zluo003/donebot-cloud-service@sha256:7a9a942a670117d9403e3614508c4961fd4943359cb4b881cace1fd6bc25b236"
+NEW_DESKTOP="ghcr.io/zluo003/donebot-cloud-desktop@sha256:2d08f5e23349034397deae3c5e95c12374420d25b9964ba1f78ae910458a5364"
 sudo docker pull --platform linux/amd64 "$NEW_SERVICE"
 sudo docker pull --platform linux/amd64 "$NEW_DESKTOP"
 ```
@@ -156,7 +156,7 @@ sudo docker pull --platform linux/amd64 "$NEW_DESKTOP"
 ##### 2. 在目标节点现场执行团队隔离验收（要求退出码为 `0`）
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Zluo003/donebot/e117b44e74eb67b610f8b4b8268294658e717a43/scripts/verify-team-linux.mjs -o /tmp/verify-team-linux.mjs
+curl -fsSL https://raw.githubusercontent.com/Zluo003/donebot/9820c6d81dcfddbf971d93c9ac096c602e034d01/scripts/verify-team-linux.mjs -o /tmp/verify-team-linux.mjs
 sudo node /tmp/verify-team-linux.mjs \
   --image "$NEW_SERVICE" \
   --seccomp /opt/donebot-cloud/deploy/security/team-seccomp.json \
@@ -391,11 +391,11 @@ Docker 仍保持 `restart=no`，避免 Docker daemon 重启时绕过租约直接
 
 以本页“已发布的 amd64 镜像”及 `current-amd64.env` 为目标，不要把历史清单与当前配置相同误判为升级完成。
 
-| 核对项 | 上一推荐发布（2026-11-22 团队全链路） | 本次发布（2026-11-22 团队最小权限 `bot-box`） |
+| 核对项 | 上一推荐发布（2026-11-22 团队最小权限 `bot-box`） | 本次发布（2026-11-22 团队成员鉴权与目录同步） |
 | --- | --- | --- |
-| 服务摘要开头 | `1a6dd3ed3614` | `3c4983ead3ba` |
-| 同次桌面摘要开头 | `31140be7a445` | `a7ccc4794570` |
-| DoneBot 源码 revision | `fa2e2ab` | `e117b44` |
+| 服务摘要开头 | `3c4983ead3ba` | `7a9a942a6701` |
+| 同次桌面摘要开头 | `a7ccc4794570` | `2d08f5e23349` |
+| DoneBot 源码 revision | `e117b44` | `9820c6d` |
 
 先根据实例 UUID、agent 的 deployment ID 和 `cn.donebot.cloud.*` 标签确认本节点的运行及桌面容器。对明确归属的运行容器执行只读检查，将 `SERVICE_CONTAINER_NAME` 换成其完整名称：
 
@@ -434,7 +434,7 @@ sudo systemctl start donebot-cloud-agent
 sudo systemctl start donebot-cloud-worker
 ```
 
-运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `e117b44e74eb67b610f8b4b8268294658e717a43`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
+运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `9820c6d81dcfddbf971d93c9ac096c602e034d01`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
 
 ### 手机中的 Cloud 显示离线
 
@@ -487,4 +487,4 @@ sudo /usr/bin/node --env-file=/etc/donebot-cloud/agent.env /opt/donebot-cloud/sr
 
 升级顺序为先安装 DoneBot 0.1.153 或后续兼容桌面客户端，再部署已发布的 `cloud-service` 服务镜像。旧桌面依赖云端静态页面，不能先切成 API 专用镜像。不要向已有 `server` 镜像仅删除目录来模拟升级。本次新摘要包含 Muse 的 4–10 秒能力登记（默认 6 秒）、PNG/JPEG 预处理和附件预算整理；11 月 15 日及更早的历史摘要不包含本次改动。
 
-当前推荐的服务和配套桌面镜像统一见本页[已发布的 amd64 镜像](#已发布的-amd64-镜像)（2026-11-22，DoneBot `e117b44e74eb67b610f8b4b8268294658e717a43`、Cloud `6c847feaed2978a215310da954df5752c7882232`，详见[发布证据](verification/images-2026-11-22-teams-box-amd64.json)）。沿用既有保留数据的受控实例升级流程；此次仅发布镜像，没有升级生产实例。此前清单（如 `2026-11-22-teams-amd64.env`、`2026-11-22-bot-link-rooms-amd64.env`、`2026-11-22-upgrade-amd64.env`）保留供核对与回退。不得改写历史发布记录或使用未经发布验证的本地测试 image ID。API 拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。
+当前推荐的服务和配套桌面镜像统一见本页[已发布的 amd64 镜像](#已发布的-amd64-镜像)（2026-11-22，DoneBot `9820c6d81dcfddbf971d93c9ac096c602e034d01`、Cloud `5ded677f7bab29f8d6ca389f37bec57d3c932c92`，详见[发布证据](verification/images-2026-11-22-teams-auth-amd64.json)）。沿用既有保留数据的受控实例升级流程；此次仅发布镜像，没有升级生产实例。此前清单（如 `2026-11-22-teams-box-amd64.env`、`2026-11-22-teams-amd64.env`、`2026-11-22-bot-link-rooms-amd64.env`）保留供核对与回退。不得改写历史发布记录或使用未经发布验证的本地测试 image ID。API 拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。

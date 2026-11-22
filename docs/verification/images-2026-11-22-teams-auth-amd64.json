@@ -1,0 +1,88 @@
+{
+  "date": "2026-11-22",
+  "workflow": "https://github.com/Zluo003/DoneBot-Cloud/actions/runs/45009157303",
+  "attempt": 1,
+  "conclusion": "success",
+  "manifest": {
+    "source_revision": "9820c6d81dcfddbf971d93c9ac096c602e034d01",
+    "platform": "linux/amd64",
+    "output": "/home/runner/work/_temp/donebot-images",
+    "docker_context": "current",
+    "archive": false,
+    "images": {
+      "service": {
+        "id": "sha256:32675ede67032583ccdf347bf6b79bd24ccfedeea426e12309d18dcc9592b040",
+        "platform": "linux/amd64",
+        "revision": "9820c6d81dcfddbf971d93c9ac096c602e034d01"
+      },
+      "desktop": {
+        "id": "sha256:207a6f62af9020ef8a72de00721f4bd7bfe5f0f131af779b072bb293de8fec59",
+        "platform": "linux/amd64",
+        "revision": "9820c6d81dcfddbf971d93c9ac096c602e034d01"
+      }
+    },
+    "cloud_revision": "5ded677f7bab29f8d6ca389f37bec57d3c932c92",
+    "registry": {
+      "service": "ghcr.io/zluo003/donebot-cloud-service@sha256:7a9a942a670117d9403e3614508c4961fd4943359cb4b881cace1fd6bc25b236",
+      "desktop": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:2d08f5e23349034397deae3c5e95c12374420d25b9964ba1f78ae910458a5364"
+    }
+  },
+  "registryVerification": [
+    {
+      "kind": "service",
+      "reference": "ghcr.io/zluo003/donebot-cloud-service@sha256:7a9a942a670117d9403e3614508c4961fd4943359cb4b881cace1fd6bc25b236",
+      "anonymousPullMetadata": true,
+      "registryDigestVerified": true,
+      "imageConfigDigest": "sha256:32675ede67032583ccdf347bf6b79bd24ccfedeea426e12309d18dcc9592b040",
+      "platform": "linux/amd64",
+      "sourceRevision": "9820c6d81dcfddbf971d93c9ac096c602e034d01",
+      "teamProtocol": "donebot.teams.v1",
+      "layers": 14
+    },
+    {
+      "kind": "desktop",
+      "reference": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:2d08f5e23349034397deae3c5e95c12374420d25b9964ba1f78ae910458a5364",
+      "anonymousPullMetadata": true,
+      "registryDigestVerified": true,
+      "imageConfigDigest": "sha256:207a6f62af9020ef8a72de00721f4bd7bfe5f0f131af779b072bb293de8fec59",
+      "platform": "linux/amd64",
+      "sourceRevision": "9820c6d81dcfddbf971d93c9ac096c602e034d01",
+      "layers": 20
+    }
+  ],
+  "registryCheckedAt": "2026-11-22T09:52:09Z",
+  "linuxVerification": {
+    "linux": { "result": "linux_fixture_passed" },
+    "egress": { "result": "controlled_egress_fixture_passed" },
+    "desktop": { "result": "linux_desktop_fixture_passed" },
+    "teamDefaultFailClosed": { "code": 2, "acceptance": "blocked" },
+    "teamMinimalPrivilege": {
+      "code": 0,
+      "security": {
+        "unprivileged": true,
+        "readOnly": true,
+        "capabilities": [],
+        "noNewPrivileges": true,
+        "network": "none",
+        "seccomp": "team-minimal",
+        "apparmor": "donebot-team-container",
+        "systempaths": "unconfined-compensated-by-apparmor"
+      },
+      "probe": { "box": "bwrap", "bridge": "socat", "passed": 32, "total": 32, "failed": [], "durationMs": 118 },
+      "readiness": { "app": "donebot", "team_protocol": "donebot.teams.v1", "ready": true },
+      "teamConfigAuthenticated": true
+    }
+  },
+  "releasePair": {
+    "gatewayRelease": "v0.4.57",
+    "gatewayReleaseUrl": "https://github.com/Zluo003/donebot-api/releases/tag/v0.4.57",
+    "desktopVersion": "0.1.3",
+    "desktopRevision": "9820c6d81dcfddbf971d93c9ac096c602e034d01",
+    "desktopUnsignedDmgSha256": "e115f997e3dfc6b6b915ac0360d7945345b2a35300854dbe92e8145a19c186e0",
+    "mobileRevision": "1ec86e3f11574a1dec2d9b7c16490c139a9863e5"
+  },
+  "limitations": [
+    "已发布镜像并更新远端 cloud-images-amd64-current 清单，未升级线上生产节点或容器。",
+    "目标生产 Debian 12 节点已完成 32/32 隔离验收并合入 5ded677 节点兼容修复；本次滚动升级须按部署文档保留数据将已有个人及团队容器升级至新摘要 7a9a942a6701 / 2d08f5e23349。"
+  ]
+}

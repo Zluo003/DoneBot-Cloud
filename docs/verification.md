@@ -1,5 +1,13 @@
 # 隔离验证记录
 
+## 2026-11-22：团队成员 `/api/config` 鉴权与目录同步双镜像
+
+[run 45009157303](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/45009157303) 第 1 次执行成功，DoneBot 固定源码为 `9820c6d81dcfddbf971d93c9ac096c602e034d01`，Cloud 验证提交为 `5ded677f7bab29f8d6ca389f37bec57d3c932c92`（含 Docker CLI `MaskedPaths`/`ReadonlyPaths` 规格检查兼容修复，`npm test` 57/57 通过），平台 `linux/amd64`，配套网关 Release [v0.4.57](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.57) 与新版 arm64 DMG（SHA-256 `e115f997e3dfc6b6b915ac0360d7945345b2a35300854dbe92e8145a19c186e0`）。
+
+- 真实 Linux 双租户隔离（`verify-linux.mjs`）、受控出网（`verify-egress.mjs`）、专属桌面（`verify-desktop.mjs`）及两轮团队最小权限隔离验收均通过：Docker 默认配置维持退出码 `2` fail-closed；最小权限团队配置返回退出码 `0`、`box: "bwrap"`、`bridge: "socat"`、**32/32 对抗隔离探针全部通过**（`durationMs: 118`）、`readiness.ready: true`，并新增实测断言团队容器内已鉴权成员请求 `GET /api/config` 返回 `donebot.enabled=true`、`donebot.authenticated=true` 及当前成员邮箱（不暴露个人/Owner 凭据）。
+- 匿名只读核验 GHCR 公开清单与镜像配置：服务摘要 `7a9a942a670117d9403e3614508c4961fd4943359cb4b881cace1fd6bc25b236`（`platform=linux/amd64`、`revision=9820c6d81dcfddbf971d93c9ac096c602e034d01`、`cn.donebot.teams.protocol=donebot.teams.v1`、14 层）与桌面摘要 `2d08f5e23349034397deae3c5e95c12374420d25b9964ba1f78ae910458a5364`（`platform=linux/amd64`、`revision=9820c6d81dcfddbf971d93c9ac096c602e034d01`、20 层）校验一致。原始记录见[发布证据](verification/images-2026-11-22-teams-auth-amd64.json)。
+- [当前推荐清单](../deploy/images/current-amd64.env)与[固定版本](../deploy/images/2026-11-22-teams-auth-amd64.env)已同步，与远端 [cloud-images-amd64-current](https://github.com/Zluo003/DoneBot-Cloud/releases/tag/cloud-images-amd64-current) 一致。回退清单保留为 `2026-11-22-teams-box-amd64.env`。
+
 ## 2026-11-22：最小权限团队 `bot-box` 隔离验收通过双镜像
 
 [run 45006096648](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/45006096648) 第 1 次执行成功，DoneBot 固定源码为 `e117b44e74eb67b610f8b4b8268294658e717a43`（`cloud-service` 补齐 `python3` 与 `verify-team-linux.mjs` 参数支持），Cloud 构建与验证提交为 `6c847feaed2978a215310da954df5752c7882232`（`npm test` 57/57 通过），平台 `linux/amd64`，配套网关 Release [v0.4.57](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.57)。

@@ -199,6 +199,8 @@ rm -f /tmp/verify-team-linux.mjs
    ```
    确认 agent `/healthz` 返回 `"ready": true`、`"team_apparmor_ready": true`、`"team_protocol": "donebot.teams.v1"`，且 worker `/healthz` 返回 `"ready": true` 后，再恢复节点分配。
 
+- 仅更新受信节点代码（不更换镜像或 AppArmor profile）时，在维护窗口依次执行：停止 `donebot-cloud-worker` 与 `donebot-cloud-agent` → 在 `/opt/donebot-cloud` 执行 `sudo git pull --ff-only` → 依次启动 `donebot-cloud-agent` 与 `donebot-cloud-worker`。此前已按新镜像创建、停留在 `Created` 状态的团队容器保留即可，无须手工删除，恢复服务后会随有效租约自动校验并启动。
+
 #### 始终读取当前推荐清单
 
 部署使用固定入口 [registry-images.env](https://github.com/Zluo003/DoneBot-Cloud/releases/download/cloud-images-amd64-current/registry-images.env)，取得同一次成功发布的服务与桌面不可变摘要；不要从历史文档或 GHCR 包列表猜测最新版本。本次清单已发布。

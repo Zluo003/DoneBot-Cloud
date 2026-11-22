@@ -96,17 +96,22 @@ export function teamSecurityArgs(config) {
   ];
 }
 
-export function checkContainerSecurityOpts(securityOpt, teamConfig) {
+export function checkContainerSecurityOpts(securityOpt, teamConfig, hostConfig = null) {
   const opts = Array.isArray(securityOpt) ? securityOpt : [];
+  const maskedPaths = hostConfig?.MaskedPaths;
+  const readonlyPaths = hostConfig?.ReadonlyPaths;
   if (!opts.includes('no-new-privileges') && !opts.includes('no-new-privileges:true')) return false;
   if (!teamConfig) {
     if (opts.some(opt => /(?:^|:|=)unconfined$/i.test(opt))) return false;
-    return !opts.some(opt => /^(?:seccomp|apparmor|systempaths|label)[=:]/i.test(opt));
+    if (opts.some(opt => /^(?:seccomp|apparmor|systempaths|label)[=:]/i.test(opt))) return false;
+    // Docker CLI translates --security-opt systempaths=unconfined into empty MaskedPaths/ReadonlyPaths.
+    if ((Array.isArray(maskedPaths) && maskedPaths.length === 0) || (Array.isArray(readonlyPaths) && readonlyPaths.length === 0)) return false;
+    return true;
   }
   if (!teamConfig.appArmor.enabled || !teamConfig.appArmor.profileLoaded) return false;
   let hasSeccomp = false;
   let hasAppArmor = false;
-  let hasSystemPaths = false;
+  let hasSystemPathsOpt = false;
   for (const opt of opts) {
     if (opt === 'no-new-privileges' || opt === 'no-new-privileges:true') continue;
     if (/^seccomp[=:]/i.test(opt)) {
@@ -132,13 +137,17 @@ export function checkContainerSecurityOpts(securityOpt, teamConfig) {
       continue;
     }
     if (opt === 'systempaths=unconfined' || opt === 'systempaths:unconfined') {
-      if (hasSystemPaths) return false;
-      hasSystemPaths = true;
+      if (hasSystemPathsOpt) return false;
+      hasSystemPathsOpt = true;
       continue;
     }
     return false;
   }
-  return hasSeccomp && hasAppArmor && hasSystemPaths;
+  const hasMaskedPaths = Array.isArray(maskedPaths) && maskedPaths.length > 0;
+  const hasReadonlyPaths = Array.isArray(readonlyPaths) && readonlyPaths.length > 0;
+  if (hasMaskedPaths || hasReadonlyPaths) return false;
+  const unmaskedViaHostConfig = Array.isArray(maskedPaths) && maskedPaths.length === 0 && Array.isArray(readonlyPaths) && readonlyPaths.length === 0;
+  return hasSeccomp && hasAppArmor && (hasSystemPathsOpt || unmaskedViaHostConfig);
 }
 
 export function resolveTeamSecurityConfig({ teamsEnabled, seccompPath, appArmorProfile, readAppArmor = hostAppArmorState }) {

@@ -66,7 +66,11 @@ test('container security options enforce strict separation between personal and 
   const missingAppArmor = { seccomp, appArmor: { enabled: true, profileLoaded: false, profile: DEFAULT_TEAM_APPARMOR_PROFILE } };
 
   // Personal containers must stay on Docker defaults with no-new-privileges only.
+  const dockerDefaultPaths = { MaskedPaths: ['/proc/kcore'], ReadonlyPaths: ['/proc/sys'] };
+  const dockerUnmaskedPaths = { MaskedPaths: [], ReadonlyPaths: [] };
   assert.equal(checkContainerSecurityOpts(['no-new-privileges'], null), true);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges'], null, dockerDefaultPaths), true);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges'], null, dockerUnmaskedPaths), false);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`], null), false);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', 'seccomp=unconfined'], null), false);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', 'systempaths=unconfined'], null), false);
@@ -82,11 +86,16 @@ test('container security options enforce strict separation between personal and 
   assert.throws(() => teamSecurityArgs(withoutAppArmor), { code: 'team_apparmor_profile_missing' });
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=donebot-team-container', 'systempaths=unconfined'], withAppArmor), true);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges:true', `seccomp=${rawJson}`, 'apparmor=donebot-team-container', 'systempaths=unconfined'], withAppArmor), true);
+  // Real Docker CLI strips systempaths=unconfined from SecurityOpt and stores empty MaskedPaths/ReadonlyPaths in HostConfig.
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges:true', `seccomp=${rawJson}`, 'apparmor=donebot-team-container'], withAppArmor, dockerUnmaskedPaths), true);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges:true', `seccomp=${rawJson}`, 'apparmor=donebot-team-container'], withAppArmor, dockerDefaultPaths), false);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=donebot-team-container', 'systempaths=unconfined'], withAppArmor, dockerDefaultPaths), false);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=donebot-team-container'], withAppArmor), false);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=unconfined', 'systempaths=unconfined'], withAppArmor), false);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', 'seccomp=unconfined', 'apparmor=donebot-team-container', 'systempaths=unconfined'], withAppArmor), false);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'systempaths=unconfined'], withAppArmor), false);
   assert.equal(checkContainerSecurityOpts(['no-new-privileges', `seccomp=${seccomp.path}`, 'apparmor=donebot-team-container', 'systempaths=unconfined'], withoutAppArmor), false);
+  assert.equal(checkContainerSecurityOpts(['no-new-privileges:true', `seccomp=${rawJson}`, 'apparmor=donebot-team-container'], withoutAppArmor, dockerUnmaskedPaths), false);
 
   assert.equal(resolveTeamSecurityConfig({ teamsEnabled: false }), null);
 });

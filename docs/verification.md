@@ -1,5 +1,17 @@
 # 隔离验证记录
 
+## 2026-11-22：最小权限团队 `bot-box` 隔离验收通过双镜像
+
+[run 45006096648](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/45006096648) 第 1 次执行成功，DoneBot 固定源码为 `e117b44e74eb67b610f8b4b8268294658e717a43`（`cloud-service` 补齐 `python3` 与 `verify-team-linux.mjs` 参数支持），Cloud 构建与验证提交为 `6c847feaed2978a215310da954df5752c7882232`（`npm test` 57/57 通过），平台 `linux/amd64`，配套网关 Release [v0.4.57](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.57)。
+
+- 真实 Linux 双租户隔离（`verify-linux.mjs`）、受控出网（`verify-egress.mjs`）及配套图形桌面（`verify-desktop.mjs`）均在一次性 Ubuntu 24.04 x64 runner（Docker 28.0.4、nftables 1.0.9）通过；个人容器继续严格使用 Docker 默认 seccomp/AppArmor + `no-new-privileges`，不做任何放宽。
+- 在同一 Ubuntu 24.04 x64 runner 上执行两轮真实 Linux 团队容器隔离验收（`verify-team-linux.mjs`，保持 `--user 1001:1001 --read-only --cap-drop ALL --security-opt no-new-privileges --network none`）：
+  1. **Docker 默认配置**：退出码 `2`（`probe: { box: "off", reason: "userns-refused" }`、`readiness.ready: false`、`execution: "refused with 503"`、`acceptance: "blocked"`），默认 fail-closed 不变；
+  2. **最小权限团队配置**（`deploy/security/team-seccomp.json` + `deploy/security/install-team-apparmor.sh` 加载 `donebot-team-container (enforce)` 接管全部 `/proc`、`/sys` `MaskedPaths`/`ReadonlyPaths` 防护 + AppArmor 补偿的 `systempaths`）：**退出码 `0`**、`probeExit: 0`、`box: "bwrap"`、`bridge: "socat"`、**32/32 对抗隔离探针全部通过**（含 `keyring-denied: Operation not permitted`、`other-pid-hidden`、`server-pid-hidden`、`engine-runs`、`engine-read-only: EROFS`、`harness-*`、`egress-*`、`broker-*`、`durationMs: 133`）、`readiness: { app: "donebot", team_protocol: "donebot.teams.v1", ready: true }`、`authenticatedReads: "passed"`、`foreignTeam: "refused"`、`acceptance: "isolation-only"`。
+- 匿名只读核验 GHCR 公开清单与镜像配置：服务摘要 `3c4983ead3ba11154fc2c0a2bb537aa2c6630a472eae966363e822503ccf6e47`（`platform=linux/amd64`、`revision=e117b44e74eb67b610f8b4b8268294658e717a43`、`cn.donebot.teams.protocol=donebot.teams.v1`、14 层）与桌面摘要 `a7ccc479457051adb041dff6a6429bc8d490150e0c3f52de41b92d833d30a955`（`platform=linux/amd64`、`revision=e117b44e74eb67b610f8b4b8268294658e717a43`、20 层）校验一致。原始记录见[发布证据](verification/images-2026-11-22-teams-box-amd64.json)。
+- [当前推荐清单](../deploy/images/current-amd64.env)与[固定版本](../deploy/images/2026-11-22-teams-box-amd64.env)已同步，与远端 [cloud-images-amd64-current](https://github.com/Zluo003/DoneBot-Cloud/releases/tag/cloud-images-amd64-current) 一致。
+- 限制边界：本次仅发布镜像与更新清单，未升级生产节点或已有容器；目标生产 Debian 12 节点（AppArmor 3.0.x）上线前须在目标主机运行 `install-team-apparmor.sh` 与 `verify-team-linux.mjs` 实测返回 `0` 后再开启 `CLOUD_TEAMS_ENABLED=1`；回退清单保留为 `2026-11-22-teams-amd64.env`。
+
 ## 2026-11-22：团队协作全链路接入双镜像
 
 [run 45001646589](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/45001646589) 第 1 次执行成功，DoneBot 固定源码为 `fa2e2abeb02d02bd80454504dce7a3e1fe12cc0c`，Cloud 构建与验证提交为 `afa648014d5c97309ff06bce4b324e7c39797b27`，平台 `linux/amd64`，配套网关 Release [v0.4.57](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.57) 与手机端提交 `1ec86e3f11574a1dec2d9b7c16490c139a9863e5`。

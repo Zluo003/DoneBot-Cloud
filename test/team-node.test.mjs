@@ -19,7 +19,7 @@ async function nodeFixture(t, { enabled = true, protocol = TEAM_PROTOCOL, coordi
   const server = createServer((req, res) => {
     try {
       const member = teamRequest(f.team, req, req.url);
-      seen.push({ ...member, bearer: req.headers.authorization, cookie: req.headers.cookie });
+      seen.push({ ...member, bearer: req.headers.authorization, cookie: req.headers.cookie, computerSecret: req.headers['x-omb-computer-secret'] });
       json(res, 200, { user_id: member.userId, role: member.role });
     } catch (e) { fail(res, e); }
   });
@@ -77,6 +77,15 @@ test('worker and agent preserve actual member identity across HTTP and WebSocket
   const response = await f.proxy('/api/bots?limit=1'); assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { user_id: '303', role: 'member' });
   assert.equal(f.seen[0].bearer, undefined); assert.equal(f.seen[0].cookie, undefined);
+  const sharedSecret = 'a'.repeat(64);
+  const shared = await fetch(`${f.worker.origin}/v1/instances/${f.id}/proxy/api/shared-computers/connect`, {
+    method: 'POST',
+    headers: { ...f.headers('/api/shared-computers/connect', 'member', 'POST'), 'x-omb-computer-secret': sharedSecret },
+    body: '{}',
+  });
+  assert.equal(shared.status, 200);
+  assert.equal(f.seen.at(-1).computerSecret, sharedSecret);
+  assert.equal(f.seen.at(-1).bearer, undefined); assert.equal(f.seen.at(-1).cookie, undefined);
   assert.ok(!JSON.stringify(f.logs).includes(f.coordinator.credential));
   assert.ok(!JSON.stringify(f.seen).includes(f.coordinator.credential));
   assert.equal((await f.proxy('/api/bots', 'member', 'GET', { team_id: randomUUID() })).status, 401);

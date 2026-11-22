@@ -5,7 +5,7 @@ import { Fault } from './common.mjs';
 // Credentials and forwarding headers are reconstructed at each trust boundary.
 export function proxyHeaders(req, origin, bearer) {
   const headers = { host: new URL(origin).host, 'x-forwarded-proto': new URL(origin).protocol.slice(0, -1) };
-  for (const name of ['content-type', 'accept', 'range', 'if-range', 'if-none-match', 'last-event-id', 'user-agent', 'x-donebot-bot-link', 'x-omb-background']) if (typeof req.headers[name] === 'string') headers[name] = req.headers[name];
+  for (const name of ['content-type', 'accept', 'range', 'if-range', 'if-none-match', 'last-event-id', 'user-agent', 'x-donebot-bot-link', 'x-omb-background', 'x-omb-computer-secret']) if (typeof req.headers[name] === 'string') headers[name] = req.headers[name];
   if (req.headers.origin) headers.origin = origin;
   if (bearer) headers.authorization = `Bearer ${bearer}`;
   return headers;

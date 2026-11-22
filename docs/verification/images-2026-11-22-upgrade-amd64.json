@@ -1,0 +1,145 @@
+{
+  "date": "2026-11-22",
+  "workflow": "https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44985895233",
+  "attempt": 2,
+  "conclusion": "success",
+  "manifest": {
+    "source_revision": "d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1",
+    "platform": "linux/amd64",
+    "output": "/home/runner/work/_temp/donebot-images",
+    "docker_context": "current",
+    "archive": false,
+    "images": {
+      "service": {
+        "id": "sha256:cfed56fb4cd3892ce7011f9492ba90e767f57f5c498b694bf4590b89a21f5634",
+        "platform": "linux/amd64",
+        "revision": "d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1"
+      },
+      "desktop": {
+        "id": "sha256:18fe8aee3a27b77e7753fcb92e6046f9ca2937453429218c706b4fd8242a6bd9",
+        "platform": "linux/amd64",
+        "revision": "d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1"
+      }
+    },
+    "cloud_revision": "90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01",
+    "registry": {
+      "service": "ghcr.io/zluo003/donebot-cloud-service@sha256:336dfba641b59fa28c55301e8a6b7f14703712db14ab7a2be29a5a18171f56f8",
+      "desktop": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:53a3b6e0ff156fd1461c8e25c72ad160d5ca2faca7845e4a7f5b165aaac16fe5"
+    }
+  },
+  "registryVerification": [
+    {
+      "kind": "service",
+      "reference": "ghcr.io/zluo003/donebot-cloud-service@sha256:336dfba641b59fa28c55301e8a6b7f14703712db14ab7a2be29a5a18171f56f8",
+      "anonymousPullMetadata": true,
+      "registryDigestVerified": true,
+      "imageConfigDigest": "sha256:cfed56fb4cd3892ce7011f9492ba90e767f57f5c498b694bf4590b89a21f5634",
+      "platform": "linux/amd64",
+      "sourceRevision": "d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1",
+      "teamProtocol": "donebot.teams.v1",
+      "layers": 14
+    },
+    {
+      "kind": "desktop",
+      "reference": "ghcr.io/zluo003/donebot-cloud-desktop@sha256:53a3b6e0ff156fd1461c8e25c72ad160d5ca2faca7845e4a7f5b165aaac16fe5",
+      "anonymousPullMetadata": true,
+      "registryDigestVerified": true,
+      "imageConfigDigest": "sha256:18fe8aee3a27b77e7753fcb92e6046f9ca2937453429218c706b4fd8242a6bd9",
+      "platform": "linux/amd64",
+      "sourceRevision": "d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1",
+      "layers": 20
+    }
+  ],
+  "registryCheckedAt": "2026-11-22T05:01:53.712Z",
+  "linuxVerification": {
+    "linux": {
+      "result": "linux_fixture_passed",
+      "platform": "linux",
+      "arch": "x64",
+      "kernel": "7.0.0-1017-azure",
+      "node": "v24.18.0",
+      "dockerServer": "28.0.4",
+      "image": "sha256:cfed56fb4cd3892ce7011f9492ba90e767f57f5c498b694bf4590b89a21f5634",
+      "users": 2,
+      "separateNetworkNamespaces": true,
+      "crossVolumeDenied": true,
+      "dockerSocketAbsent": true,
+      "controlSecretsAbsent": true,
+      "networkDenied": true,
+      "persistence": true,
+      "scopedPurge": true,
+      "publicInternetEgress": false
+    },
+    "egress": {
+      "result": "controlled_egress_fixture_passed",
+      "kernel": "7.0.0-1017-azure",
+      "node": "v24.18.0",
+      "docker": "28.0.4",
+      "nft": "nftables v1.0.9 (Old Doc Yak #3)",
+      "image": "sha256:cfed56fb4cd3892ce7011f9492ba90e767f57f5c498b694bf4590b89a21f5634",
+      "users": 2,
+      "publicHTTP": true,
+      "publicHTTPSAndDNS": true,
+      "gatewayAnonymous401": true,
+      "tenantNetworkDenied": true,
+      "hostPrivateAndPublicDenied": true,
+      "metadataDenied": true,
+      "customPublicRangeDenied": true,
+      "unapprovedTCPAndUDPDenied": true,
+      "IPv6Denied": true,
+      "mappedIPv4AndRebindingDenied": true,
+      "unsolicitedInboundDenied": true,
+      "firewallUnavailableBlocksCreation": true,
+      "foreignFirewallTablePreserved": true,
+      "failedAtomicUpdateRetainsPolicy": true,
+      "explicitCohostGatewayHTTPS": true,
+      "cohostOtherPortsAndHostAddressesDenied": true,
+      "cohostCrossTenantDenied": true,
+      "gatewayExceptionRemovalRestoresDeny": true,
+      "agentRecreation": true,
+      "scopedNetworkRemoval": true
+    },
+    "desktop": {
+      "result": "linux_desktop_fixture_passed",
+      "image": "sha256:cfed56fb4cd3892ce7011f9492ba90e767f57f5c498b694bf4590b89a21f5634",
+      "desktopImage": "sha256:18fe8aee3a27b77e7753fcb92e6046f9ca2937453429218c706b4fd8242a6bd9",
+      "users": 2,
+      "actualDesktopContainers": true,
+      "nativeDoneBotStatus": true,
+      "nativeCUAFrame": true,
+      "originalMCPBridge": true,
+      "boundedFileDownload": true,
+      "executionUID1000": true,
+      "otherSocketAndVolumeDenied": true,
+      "crossDesktopNetworkDenied": true,
+      "stopStartPersistence": true,
+      "rawViewerWebSocket": true,
+      "viewerExcludesDesktopExec": true,
+      "persistedDiskQuotaAndRestoreAfterDefaultIncrease": true,
+      "nativeViewerWebSocket": true,
+      "runtimeLeaseExpiryStopsAndDisconnectsDesktop": true,
+      "subscriptionStopDisconnectsViewer": true,
+      "stoppedRuntimeRefusesDesktopAccess": true,
+      "combinedEncryptedBackups": true,
+      "corruptionRejectsBeforeEitherOverwrite": true,
+      "idempotentTwoDiskRestore": true,
+      "interruptedTwoDiskRestoreRecovered": true,
+      "explicitDesktopUpgradeRetainsHome": true,
+      "idleStop": true,
+      "purgeRemovesDesktopData": true
+    }
+  },
+  "releasePair": {
+    "gatewayRelease": "v0.4.55",
+    "gatewayReleaseUrl": "https://github.com/Zluo003/donebot-api/releases/tag/v0.4.55",
+    "desktopVersion": "0.1.3",
+    "desktopRevision": "d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1",
+    "desktopUnsignedDmgSha256": "82d19a7fb64ae5d570f8ef72dd7ce3889054579b32a9488a6a1788ec27937fad"
+  },
+  "limitations": [
+    "已发布镜像并更新远端 cloud-images-amd64-current 清单，未升级线上生产节点或容器。",
+    "第 1 次运行在 verify-egress.mjs 访问 donebot.cn 时遇到瞬时 502；确认恢复 401 后第 2 次运行全部通过。",
+    "使用隔离合成用户验证 Linux 双租户服务容器、受控出网与云桌面，未执行收费模型请求或真实生产团队用户命名空间沙箱对抗验收。",
+    "团队运行时能力默认关闭；生产开启前须在支持现有安全配置下用户命名空间的 Linux 环境完成团队隔离验收。"
+  ]
+}

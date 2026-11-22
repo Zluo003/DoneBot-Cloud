@@ -59,13 +59,13 @@ DoneBot 运行容器使用固定镜像摘要、UID 1001、只读根目录、CPU 
 
 1. 推送包含 Cloud 改动的 donebot-api，并发布带 Linux 二进制和 `checksums.txt` 的正式 Release。只推送源码不会让后台获得新版；仅镜像的 simple release 不适用于二进制在线更新。
 2. 在网关服务器一次性配置 `/etc/sub2api/environment`：`DONEBOT_ENABLED`、固定的 `DONEBOT_CLOUD_SIGNING_SEED`、主控和浏览器 origin。旧 systemd unit 通过 drop-in 加载该文件；后续后台更新保留这些配置和密钥。
-3. 备份网关数据库，在后台更新并重启。新二进制自动应用 Cloud 迁移 260–264、269；先保持 Cloud 套餐关闭。迁移 269 为仍在付费期、未退款且因旧版取消操作停机的实例恢复运行意图，后续由节点重新启动，不重新扣款。
+3. 备份网关数据库，在后台更新并重启。新二进制自动应用 Cloud 迁移 260–264、269 及团队相关迁移 271–278（团队能力默认关闭）；先保持 Cloud 套餐关闭。迁移 269 为仍在付费期、未退款且因旧版取消操作停机的实例恢复运行意图，后续由节点重新启动，不重新扣款。
 4. 为 `*.cloud.donebot.cn` 配置指向主控的 DNS/TLS；登记节点，将后台生成的节点 ID、独立 token 和主控公钥填入节点配置，再启动 agent、worker 和 health timer。
 5. 隔离预发布验收通过后，配置月费、默认 7 天保留期和节点容量，开放套餐。
 
 完整命令、持久配置、旧 unit 兼容步骤及节点环境文件见 [部署说明](docs/deployment.md)，回退边界见 [发布说明](docs/release-runbook.md)。网关在线更新只更新网关程序；Cloud 节点代码及 DoneBot/桌面镜像按节点升级流程单独发布。
 
-Cloud 节点默认从 GHCR 在线拉取已发布的两类镜像。当前推荐为 2026-11-17 的 [x64 API 专用双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44011099571)，DoneBot 源码 `d128b95b79ffc36a978229f0166b297fbab4a9e8`，新增按 Bot 汇总的产物列表、任务显示名称及预览下载，包含 Bot/群聊间四类附件交付、手机预览/下载的 Range 与文件版本校验，并保留 Muse 最长 10 秒、图片／视频首选与备用、图片预处理及附件整理；Cloud 仅提供 API，桌面共用安装包界面，并保留 HTTP 响应中断防护和手机适配。桌面持续会话续期、返回本地和保存项续连需更新桌面应用。节点退出恢复还需更新 agent/worker 至 `682308ad059f3d81d4334dd3b96586db7608930e` 或后续版本。默认在线入口为 [当前推荐清单](https://github.com/Zluo003/DoneBot-Cloud/releases/download/cloud-images-amd64-current/registry-images.env)，本地副本为 [current-amd64.env](deploy/images/current-amd64.env)，本次固定版本为 [2026-11-17-artifacts-amd64.env](deploy/images/2026-11-17-artifacts-amd64.env)；直接拉取命令见 [已发布镜像](docs/deployment.md#已发布的-amd64-镜像)。历史镜像文件保留用于核对，不作为本次升级目标。
+Cloud 节点默认从 GHCR 在线拉取已发布的两类镜像。当前推荐为 2026-11-22 的 [x64 API 专用双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44985895233)，DoneBot 源码 `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`、Cloud 验证提交 `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01`，对应网关 Release [v0.4.55](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.55)。本次镜像包含 OpenMausBot v0.1.173 阶段升级能力（稳定性与崩溃恢复、长历史流式聊天、暂停/上下文压缩/消息分叉、批量 Bot 设置、委派与定时跟进、自动化与收件箱、大媒体流/压缩包/数据工具与个人密码库、以及默认关闭的 `donebot.teams.v1` 团队运行时隔离框架），并保留 API 专用拆分、手机连接器、产物列表与四类附件交付。Cloud 仅提供 API，桌面共用安装包界面；团队能力默认关闭，个人 Cloud 规格（2 核 / 4 GiB，运行盘 5 GiB + 桌面资料盘 10 GiB）与旧磁盘保持不变。若节点需启用团队运行时支持，须更新 agent/worker 至 `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01` 或后续版本并在 `agent.env` / `worker.env` 显式配置（见 [部署说明](docs/deployment.md#团队运行时开关默认关闭)）。默认在线入口为 [当前推荐清单](https://github.com/Zluo003/DoneBot-Cloud/releases/download/cloud-images-amd64-current/registry-images.env)，本地副本为 [current-amd64.env](deploy/images/current-amd64.env)，本次固定版本为 [2026-11-22-upgrade-amd64.env](deploy/images/2026-11-22-upgrade-amd64.env)；直接拉取命令见 [已发布镜像](docs/deployment.md#已发布的-amd64-镜像)。历史镜像文件保留用于核对与回退，不作为本次升级目标。
 
 更新已有节点时按 [节点镜像滚动升级](docs/deployment.md#节点镜像滚动升级) 操作：先备份并使用旧配置停止 worker、agent，再修改镜像值，对每个实例执行受控升级准备，最后恢复服务。镜像已拉取、`agent.env` 已修改、实例“运行中”都不能证明容器已升级；必须核对实际容器的 `Config.Image`、源码 revision，以及手机状态接口。
 
@@ -112,4 +112,4 @@ npm run verify:donebot
 真实网关登录、开通确认、两用户独立聊天、停启、到期停机、续费保留数据及超期回收已完成 Chrome 联合验收，使用私有 PostgreSQL、真实处理器和合成余额。剩余工作为打包客户端 GUI、生产模型与目标服务器容量验收。节点 capacity 是管理员配置的实例名额，不是硬件承载能力的实测值。已有验证的范围与限制见 [首阶段进度](docs/first-milestone.md)。
 
 
-API 专用服务镜像已发布：新版桌面共用安装包前端，Cloud 通过 `cloud-service` target 仅部署 API/运行服务，手机继续使用原加密通道。须先更新桌面再更新服务镜像；实例根页面 404 为预期结果。2026-11-17 已完成发布，当前推荐清单已更新；发布不代表已有实例已升级，详见 [部署说明](docs/deployment.md#api-专用-cloud-运行镜像已发布)。
+API 专用服务镜像已发布：新版桌面共用安装包前端，Cloud 通过 `cloud-service` target 仅部署 API/运行服务，手机继续使用原加密通道。须先更新桌面再更新服务镜像；实例根页面 404 为预期结果。2026-11-22 已完成最新阶段升级双镜像发布，当前推荐清单已更新；发布不代表已有实例已升级，详见 [部署说明](docs/deployment.md#api-专用-cloud-运行镜像已发布)。

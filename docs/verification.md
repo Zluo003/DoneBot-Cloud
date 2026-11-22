@@ -1,5 +1,14 @@
 # 隔离验证记录
 
+## 2026-11-22：v0.1.173 阶段升级与默认关闭团队隔离双镜像
+
+[run 44985895233](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44985895233) 第 2 次执行成功，DoneBot 固定源码为 `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`，Cloud 构建与验证提交为 `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01`，平台 `linux/amd64`，配套网关 Release [v0.4.55](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.55)（含团队兼容迁移 271–278，默认关闭）。第 1 次执行在双镜像构建与 `verify-linux.mjs` 通过后，于 `verify-egress.mjs` 访问 `https://donebot.cn/api/v1/auth/me` 时遇到瞬时 `502`（预期 `401`）；确认网关恢复返回 `401` 后重跑，第 2 次全部检查通过并推送 GHCR。
+
+- 真实 Linux 双租户隔离（`verify-linux.mjs`）、受控出网（`verify-egress.mjs`）及配套图形桌面（`verify-desktop.mjs`）均在一次性 Ubuntu 24.04 x64 runner（Docker 28.0.4、nftables 1.0.9）通过。
+- 匿名只读核验 GHCR 公开清单与镜像配置：服务摘要 `336dfba641b59fa28c55301e8a6b7f14703712db14ab7a2be29a5a18171f56f8`（`platform=linux/amd64`、`revision=d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`、`cn.donebot.teams.protocol=donebot.teams.v1`、14 层）与桌面摘要 `53a3b6e0ff156fd1461c8e25c72ad160d5ca2faca7845e4a7f5b165aaac16fe5`（`platform=linux/amd64`、`revision=d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`、CUA 0.37.0 / image-layer 8、20 层）校验一致。原始记录见[发布证据](verification/images-2026-11-22-upgrade-amd64.json)。
+- [当前推荐清单](../deploy/images/current-amd64.env)与[固定版本](../deploy/images/2026-11-22-upgrade-amd64.env)已同步，与远端 [cloud-images-amd64-current](https://github.com/Zluo003/DoneBot-Cloud/releases/tag/cloud-images-amd64-current) 一致。
+- 限制边界：本次仅发布镜像与更新清单，未升级生产节点或已有容器；真实 Linux 团队用户命名空间沙箱隔离、收费模型及打包客户端 GUI 仍待专项验收，节点侧 `CLOUD_TEAMS_ENABLED` 与网关侧团队能力保持默认关闭。回退清单保留为 `2026-11-19-devices-amd64.env`，遵循保留数据受控升级流程。
+
 ## 2026-11-17：Cloud 自动续费独立于已付费服务
 
 用户取消自动续费仅关闭下个周期的自动扣款，不停机、不改变当前 paid_until；

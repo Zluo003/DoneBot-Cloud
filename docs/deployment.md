@@ -99,29 +99,31 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 
 #### 已发布的 amd64 镜像
 
-当前推荐已按用户要求恢复到 `d128b95` 的既有验证镜像，撤回 DoneBot 专用 Codex／Claude Code 执行器和设置入口；网关分组与密钥保留。本次复核公开注册表摘要及隔离容器，服务仅注册 `donebot`，API 和手机状态接口正常。详见[恢复记录](verification/images-2026-11-17-restore-d128b95-amd64.json)。恢复发布清单不自动替换已有运行实例；保留数据按下述节点维护流程切换镜像。
+当前推荐为 2026-11-22 完成的 [x64 API 专用双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44985895233)（第 2 次运行全部通过；第 1 次运行因 `verify-egress.mjs` 访问 `donebot.cn` 遇到瞬时 502 失败，确认恢复 401 后重跑通过）。本次发布对应网关 Release [v0.4.55](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.55)，包含 OpenMausBot v0.1.173 阶段升级能力（稳定性排队与恢复、长历史流式渲染、暂停/上下文压缩/消息分叉、批量设置与权限继承、定时跟进与委派、自动化与收件箱、大媒体流/压缩包/数据工具与个人 Bitwarden，以及默认关闭的 `donebot.teams.v1` 团队隔离框架），并保留既有的设备命名、产物列表、四类附件交付、手机断点续传、HTTP 中断防护及 Muse 10 秒能力。[发布与注册表核验记录](verification/images-2026-11-22-upgrade-amd64.json)保留源码、不可变摘要、匿名注册表核验与真实 Linux 验证结果。历史文件仅供核对与回退，不是本次升级目标。
 
-当前推荐为 2026-11-17 API 专用服务与附件整理更新后的[成功发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44011099571)，新增按 Bot 汇总的产物列表、任务名称显示和预览下载，包含 Bot/群聊之间图片、视频、音频和文档交付，手机附件分段读取和文件版本校验，以及首选／备用模型、失败告知及视频备用确认，并保留此前的手机、附件、群聊及自动化适配。[发布与注册表核验记录](verification/images-2026-11-17-artifacts-amd64.json)保留源码、不可变摘要与真实 Linux 验证结果。历史文件仅供核对，不是本次升级目标。
+DoneBot 源码固定为 `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`，Cloud 验证代码为 `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01`。两镜像已通过真实双用户服务隔离、受控出网及专属桌面验证，并匿名核对公开注册表清单、配置、平台和 `cn.donebot.teams.protocol=donebot.teams.v1` 标签；平台为 `linux/amd64`，不要用于 ARM64 节点。
 
-手机断点续传还需安装包含手机端 `d68d78d` 修复的 App；更新 Cloud 镜像不自动更新手机。该发布包含 HTTP 响应中断防护、Muse 10 秒能力、图片预处理及附件预算整理，桌面共用安装包界面。停留 Cloud 时提前续期、会话结束页返回本地和保存入口续连需安装新版客户端；本次不更改网关的登录期限。Muse 需网关部署对应接口、迁移和模型授权，仅升级镜像不会自动开放模型。意外退出自动恢复需另行更新节点 agent/worker 至 `682308ad059f3d81d4334dd3b96586db7608930e` 或后续版本，不能只换镜像。有效租约下按现有轮询恢复，连续退出使用 5、10、20 秒至 300 秒的有界退避；主动停机、撤销或租约失效不会拉起。Docker 保留 `restart=no`。
-
-DoneBot 源码固定为 `d128b95b79ffc36a978229f0166b297fbab4a9e8`，Cloud 验证代码为 `bcd5425fd05c3e8a7aab57975f9a4a1ce54cb835`。两镜像已通过真实双用户服务、受控出网及专属桌面验证，并核对公开注册表清单和配置；平台为 `linux/amd64`，不要用于 ARM64 节点。
-
-默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-17-artifacts-amd64.env](../deploy/images/2026-11-17-artifacts-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
+默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-upgrade-amd64.env](../deploy/images/2026-11-22-upgrade-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
 
 ```dotenv
-CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:20b557dc49f6ef68df0d3a3d23d81000d6eec4abdaab5e851e62a3c35d2a0a48
-CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:4c3df98fb1ececb8c9128d158bea0b8d201699f2f00ad919be6b7486032dfd5d
+CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:336dfba641b59fa28c55301e8a6b7f14703712db14ab7a2be29a5a18171f56f8
+CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:53a3b6e0ff156fd1461c8e25c72ad160d5ca2faca7845e4a7f5b165aaac16fe5
 ```
 
 在 amd64 节点直接在线拉取，无需上传离线包或在节点编译 DoneBot：
 
 ```sh
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:20b557dc49f6ef68df0d3a3d23d81000d6eec4abdaab5e851e62a3c35d2a0a48
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:4c3df98fb1ececb8c9128d158bea0b8d201699f2f00ad919be6b7486032dfd5d
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:336dfba641b59fa28c55301e8a6b7f14703712db14ab7a2be29a5a18171f56f8
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:53a3b6e0ff156fd1461c8e25c72ad160d5ca2faca7845e4a7f5b165aaac16fe5
 ```
 
-镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应包含上述 Cloud 验证提交及其兼容维护入口，已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费或目标节点状态。
+镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应更新至 `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01` 或后续兼容版本，已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。个人 Cloud 资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费、真实 Linux 团队用户命名空间沙箱或目标节点状态。
+
+#### 团队运行时开关（默认关闭）
+
+- 本次服务镜像已声明 `cn.donebot.teams.protocol=donebot.teams.v1`，但团队能力默认保持关闭，不影响现有个人 Cloud 实例的升级与运行。
+- 仅在完成真实 Linux 环境下支持现有 Docker 安全选项的用户命名空间隔离验收、且网关侧显式开放团队能力后，才可在节点 `/etc/donebot-cloud/agent.env` 与 `/etc/donebot-cloud/worker.env` 同时设置 `CLOUD_TEAMS_ENABLED=1`，并在 `agent.env` 填入与 `worker.env` 相同的 `CLOUD_MASTER_PUBLIC_KEY`（主控 Ed25519 公钥）。
+- 禁止为绕过团队 `bot-box` 自检而增加容器特权、关闭 seccomp 或放宽宿主安全策略。未配置 `CLOUD_TEAMS_ENABLED=1` 或镜像/网关不兼容时，节点自动不声明团队能力且拒绝领取团队启动命令。
 
 #### 始终读取当前推荐清单
 
@@ -313,11 +315,11 @@ Docker 仍保持 `restart=no`，避免 Docker daemon 重启时绕过租约直接
 
 以本页“已发布的 amd64 镜像”及 `current-amd64.env` 为目标，不要把历史清单与当前配置相同误判为升级完成。
 
-| 核对项 | 旧发布 | 本次发布 |
+| 核对项 | 上一推荐发布（2026-11-19） | 本次发布（2026-11-22） |
 | --- | --- | --- |
-| 服务摘要开头 | `96c47490724e` | `66df94f6261f` |
-| 同次桌面摘要开头 | `24e9bf636803` | `36899535b6eb` |
-| DoneBot 源码 revision | `cf396bc` | `cf7f37a` |
+| 服务摘要开头 | `aade988bbb0a` | `336dfba641b5` |
+| 同次桌面摘要开头 | `84a4a8672440` | `53a3b6e0ff15` |
+| DoneBot 源码 revision | `f4eb091` | `d5d455b` |
 
 先根据实例 UUID、agent 的 deployment ID 和 `cn.donebot.cloud.*` 标签确认本节点的运行及桌面容器。对明确归属的运行容器执行只读检查，将 `SERVICE_CONTAINER_NAME` 换成其完整名称：
 
@@ -356,7 +358,7 @@ sudo systemctl start donebot-cloud-agent
 sudo systemctl start donebot-cloud-worker
 ```
 
-运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `cf7f37aecbb859016385180b3c160e17fe2da393`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
+运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
 
 ### 手机中的 Cloud 显示离线
 
@@ -409,4 +411,4 @@ sudo /usr/bin/node --env-file=/etc/donebot-cloud/agent.env /opt/donebot-cloud/sr
 
 升级顺序为先安装 DoneBot 0.1.153 或后续兼容桌面客户端，再部署已发布的 `cloud-service` 服务镜像。旧桌面依赖云端静态页面，不能先切成 API 专用镜像。不要向已有 `server` 镜像仅删除目录来模拟升级。本次新摘要包含 Muse 的 4–10 秒能力登记（默认 6 秒）、PNG/JPEG 预处理和附件预算整理；11 月 15 日及更早的历史摘要不包含本次改动。
 
-当前推荐的服务和配套桌面镜像均从 DoneBot `837b7f3db66e9263aeb5a5212729d179daae5878` 构建，Cloud 构建和验证提交为 `62be34b49165daa4b90196e20caefc5072969bc6`。包含已交付附件直接汇报和再次附加时复用原文件的修复。两者均已匿名核对注册表摘要、linux/amd64 平台和 revision，详见[发布证据](verification/images-2026-11-17-attachments-amd64.json)。沿用既有保留数据的受控实例升级流程；此次仅发布镜像，没有升级生产实例。此前的[手机续传镜像记录](verification/images-2026-11-17-resume-amd64.json)保留供回退。不得改写历史发布记录或使用未经发布验证的本地测试 image ID。API 拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。
+当前推荐的服务和配套桌面镜像统一见本页[已发布的 amd64 镜像](#已发布的-amd64-镜像)（2026-11-22，DoneBot `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`、Cloud `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01`，详见[发布证据](verification/images-2026-11-22-upgrade-amd64.json)）。沿用既有保留数据的受控实例升级流程；此次仅发布镜像，没有升级生产实例。此前清单（如 `2026-11-19-devices-amd64.env`、`2026-11-17-artifacts-amd64.env`）保留供核对与回退。不得改写历史发布记录或使用未经发布验证的本地测试 image ID。API 拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。

@@ -13,7 +13,11 @@ import { teamFixture } from './team-fixtures.mjs';
 test('team host configuration pins identity and copies only validated specifications', () => {
   const f = teamFixture(), clean = teamConfiguration({ ...f.team, gateway: 'never-copy', payer: 101 }, f.id, f.publicKey);
   assert.deepEqual(clean, f.team);
-  assert.ok(!JSON.stringify(teamEnvironment(clean)).includes('gateway'));
+  const env = teamEnvironment(clean);
+  assert.ok(!JSON.stringify(env).includes('gateway'));
+  for (const required of ['DONEBOT_TEAM_FILES_ENABLED=1', 'DONEBOT_TEAM_TEMPLATES_ENABLED=1', 'DONEBOT_TEAM_EXECUTION_ENABLED=1']) {
+    assert.ok(env.includes(required), `missing ${required}`);
+  }
   for (const patch of [{ protocol: 'future' }, { instance_id: randomUUID() }, { team_id: '../x' }, { public_key: teamFixture().publicKey },
     { runtime: { ...f.team.runtime, cpu_millis: 0 } }, { shared_quota_bytes: 9 * 1024 ** 3 }, { max_file_bytes: 3 * 1024 ** 3 }]) {
     assert.throws(() => teamConfiguration({ ...f.team, ...patch }, f.id, f.publicKey));

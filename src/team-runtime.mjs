@@ -29,6 +29,7 @@ export function teamEnvironment(value) {
   return [`DONEBOT_TEAM_RUNTIME=1`, `DONEBOT_TEAM_ID=${value.team_id}`, `DONEBOT_TEAM_NAME=${value.name}`,
     `DONEBOT_TEAM_INSTANCE_ID=${value.instance_id}`, `DONEBOT_TEAM_PUBLIC_KEY=${value.public_key}`,
     `DONEBOT_TEAM_SHARED_QUOTA_BYTES=${value.shared_quota_bytes}`, `DONEBOT_TEAM_MAX_FILE_BYTES=${value.max_file_bytes}`,
+    'DONEBOT_TEAM_FILES_ENABLED=1', 'DONEBOT_TEAM_TEMPLATES_ENABLED=1', 'DONEBOT_TEAM_EXECUTION_ENABLED=1',
     'DONEBOT_TEAM_COORDINATOR_FILE=/run/donebot/team-coordinator.json'];
 }
 

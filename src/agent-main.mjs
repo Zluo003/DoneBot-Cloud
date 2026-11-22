@@ -15,6 +15,7 @@ const app = await createAgent({ socketPath: resolve(process.env.CLOUD_AGENT_SOCK
   runtime: new DockerRuntime({ stateDir, image: process.env.CLOUD_DONEBOT_IMAGE, development, binary: process.env.CLOUD_DOCKER_BINARY || '/usr/bin/docker',
     gatewayRequired: !development,
     teamsEnabled: process.env.CLOUD_TEAMS_ENABLED === '1', teamPublicKey: process.env.CLOUD_MASTER_PUBLIC_KEY,
+    teamSeccompPath: process.env.CLOUD_TEAM_SECCOMP_PATH, teamAppArmorProfile: process.env.CLOUD_TEAM_APPARMOR_PROFILE,
     desktopImage: process.env.CLOUD_DESKTOP_IMAGE, desktopBytes: process.env.CLOUD_DESKTOP_STORAGE_BYTES === undefined ? undefined : Number(process.env.CLOUD_DESKTOP_STORAGE_BYTES), desktopIdleMs: process.env.CLOUD_DESKTOP_IDLE_MINUTES === undefined ? undefined : Number(process.env.CLOUD_DESKTOP_IDLE_MINUTES) * 60000,
     storage: development ? 'volume' : 'bounded-ext4', storageBytes: process.env.CLOUD_STORAGE_BYTES === undefined ? undefined : Number(process.env.CLOUD_STORAGE_BYTES),
     egress: process.env.CLOUD_EGRESS_MODE || 'none', egressDNS: process.env.CLOUD_EGRESS_DNS?.split(','), egressDenyIPv4: process.env.CLOUD_EGRESS_DENY_IPV4?.split(','), gatewayIPv4: process.env.CLOUD_GATEWAY_IPV4?.split(','), nftBinary: process.env.CLOUD_NFT_BINARY || '/usr/sbin/nft' }),

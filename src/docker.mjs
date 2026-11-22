@@ -12,6 +12,7 @@ import { CloudDesktops } from './desktops.mjs';
 import { InstanceBackups } from './instance-backups.mjs';
 import { cloudStorageLimits, CLOUD_STORAGE_MAX_BYTES } from './resource-limits.mjs';
 import { PERSONAL_RUNTIME, TEAM_PROTOCOL, teamConfiguration, teamCoordinatorConfiguration, teamEnvironment, teamPublicKey } from './team-runtime.mjs';
+import { checkContainerSecurityOpts, resolveTeamSecurityConfig, teamSecurityArgs } from './team-security.mjs';
 
 const execute = promisify(execFile);
 // Executed only by the host agent, with no user-supplied command or arguments.
@@ -21,7 +22,7 @@ const p=await call('/api/auth/pairing',{label:'DoneBot Cloud access',scopes:['ad
 const s=await call('/api/auth/pair',{code:p.code,label:'DoneBot Cloud access'});process.stdout.write(JSON.stringify(s));`;
 
 export class DockerRuntime {
-  constructor({ stateDir, image, development = false, binary = '/usr/local/bin/docker', healthTimeoutMs = 90000, egress = 'none', egressDNS, egressDenyIPv4, gatewayIPv4, nftBinary, gatewayRequired = false, storage = 'volume', storageBytes, desktopImage, desktopBytes, desktopIdleMs, teamsEnabled = false, teamPublicKey: pinnedTeamKey }) {
+  constructor({ stateDir, image, development = false, binary = '/usr/local/bin/docker', healthTimeoutMs = 90000, egress = 'none', egressDNS, egressDenyIPv4, gatewayIPv4, nftBinary, gatewayRequired = false, storage = 'volume', storageBytes, desktopImage, desktopBytes, desktopIdleMs, teamsEnabled = false, teamPublicKey: pinnedTeamKey, teamSeccompPath, teamAppArmorProfile, readAppArmor }) {
     if (!development && !/^(?:[a-zA-Z0-9./:_-]+@)?sha256:[a-f0-9]{64}$/.test(image || '')) throw new Error('production requires an immutable DoneBot image digest');
     if (!image || /\s|[\x00-\x1f]/.test(image)) throw new Error('invalid image');
     if (!['none', 'public-web'].includes(egress)) throw new Error('invalid egress mode');
@@ -30,6 +31,7 @@ export class DockerRuntime {
     this.stateDir = privateDir(stateDir); this.image = image; this.binary = binary; this.healthTimeoutMs = healthTimeoutMs;
     this.gatewayRequired = gatewayRequired; this.teamsEnabled = teamsEnabled; this.pinnedTeamKey = pinnedTeamKey;
     if (teamsEnabled) teamPublicKey(pinnedTeamKey);
+    this.teamSecurity = resolveTeamSecurityConfig({ teamsEnabled, seccompPath: teamSeccompPath, appArmorProfile: teamAppArmorProfile, readAppArmor });
     const path = join(stateDir, 'deployment-id');
     try { writeFileSync(path, randomUUID(), { mode: 0o600, flag: 'wx' }); } catch (e) { if (e.code !== 'EEXIST') throw e; }
     this.namespace = instanceID(readFileSync(path, 'utf8'));
@@ -91,7 +93,9 @@ export class DockerRuntime {
     if (value.Mounts.some(m => m.Type === 'tmpfs' && !['/tmp', '/run'].includes(m.Destination)) || Object.keys(h.Tmpfs || {}).sort().join(',') !== '/run,/tmp') throw new Fault(409, 'resource_spec_mismatch');
     const network = this.egress ? names.network : 'none';
     if (h.NetworkMode !== network || Object.keys(value.NetworkSettings.Networks).some(name => name !== network) || (this.egress && h.Dns.join(',') !== this.egress.dns.join(','))) throw new Fault(409, 'network_spec_mismatch');
-    if (value.Config.Image !== this.image || value.Config.User !== '1001:1001' || !h.ReadonlyRootfs || h.Privileged || h.Memory !== limits.memory_mib * 1024 ** 2 || h.MemorySwap !== limits.memory_mib * 1024 ** 2 || h.NanoCpus !== limits.cpu_millis * 1e6 || h.PidsLimit !== limits.pids || h.CapDrop?.join(',') !== 'ALL' || h.CapAdd?.length || !h.SecurityOpt?.includes('no-new-privileges') || mounts.length !== 2 || !mounts.some(m => m.Type === 'volume' && m.Name === names.volume && m.Destination === '/data') || !mounts.some(m => m.Type === 'bind' && m.Source === names.edge && m.Destination === '/run/donebot') || Object.keys(h.PortBindings || {}).length) throw new Fault(409, 'resource_spec_mismatch');
+    const teamSecurity = team && this.teamSecurity ? { seccomp: this.teamSecurity.seccomp, appArmor: this.teamSecurity.readAppArmor(this.teamSecurity.profile) } : null;
+    if (team && !teamSecurity) throw new Fault(503, 'team_runtime_disabled');
+    if (value.Config.Image !== this.image || value.Config.User !== '1001:1001' || !h.ReadonlyRootfs || h.Privileged || h.Memory !== limits.memory_mib * 1024 ** 2 || h.MemorySwap !== limits.memory_mib * 1024 ** 2 || h.NanoCpus !== limits.cpu_millis * 1e6 || h.PidsLimit !== limits.pids || h.CapDrop?.join(',') !== 'ALL' || h.CapAdd?.length || !checkContainerSecurityOpts(h.SecurityOpt, teamSecurity) || mounts.length !== 2 || !mounts.some(m => m.Type === 'volume' && m.Name === names.volume && m.Destination === '/data') || !mounts.some(m => m.Type === 'bind' && m.Source === names.edge && m.Destination === '/run/donebot') || Object.keys(h.PortBindings || {}).length) throw new Fault(409, 'resource_spec_mismatch');
   }
   async status(id) { const names = this.names(id), value = await this.inspect('container', names.container); if (!value) return { state: 'absent' }; this.checkContainer(value, id, names); return { state: value.State.Running ? 'running' : 'stopped' }; }
   configureGateway(id, value) {
@@ -193,7 +197,8 @@ export class DockerRuntime {
       }
       mkdirSync(names.edge, { recursive: true, mode: 0o700 }); chownSync(names.edge, 1001, 1001); chmodSync(names.edge, 0o700);
       this.writeGateway(id, names.edge);
-      await this.docker(['container', 'create', '--name', names.container, ...labels, '--init', '--user', '1001:1001', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--memory', `${limits.memory_mib}m`, '--memory-swap', `${limits.memory_mib}m`, '--cpus', String(limits.cpu_millis / 1000), '--pids-limit', String(limits.pids), '--shm-size', '512m', '--network', this.egress ? names.network : 'none', ...(this.egress ? this.egress.dns.flatMap(ip => ['--dns', ip]) : []), '--restart', 'no', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m,mode=1777', '--tmpfs', '/run:rw,nosuid,nodev,size=8m,mode=755', '--mount', `type=volume,src=${names.volume},dst=/data`, '--mount', `type=bind,src=${names.edge},dst=/run/donebot`, '--env', 'DONEBOT_TUNNEL_SOCKET=/run/donebot/http.sock', '--env', 'DONEBOT_PORT=18899', '--env', 'DONEBOT_WEBHOOK_PORT=18900', ...(team ? teamEnvironment(team).flatMap(entry => ['--env', entry]) : this.gatewayRequired ? ['--env', 'DONEBOT_CLOUD_CREDENTIAL_FILE=/run/donebot/gateway.json'] : []), ...(this.desktops ? ['--env', 'DONEBOT_CLOUD_DESKTOP_SOCKET=/run/donebot/cloud-desktop.sock'] : []), this.image]);
+      const securityArgs = team ? teamSecurityArgs({ seccomp: this.teamSecurity.seccomp, appArmor: this.teamSecurity.readAppArmor(this.teamSecurity.profile) }) : ['--security-opt', 'no-new-privileges'];
+      await this.docker(['container', 'create', '--name', names.container, ...labels, '--init', '--user', '1001:1001', '--read-only', '--cap-drop', 'ALL', ...securityArgs, '--memory', `${limits.memory_mib}m`, '--memory-swap', `${limits.memory_mib}m`, '--cpus', String(limits.cpu_millis / 1000), '--pids-limit', String(limits.pids), '--shm-size', '512m', '--network', this.egress ? names.network : 'none', ...(this.egress ? this.egress.dns.flatMap(ip => ['--dns', ip]) : []), '--restart', 'no', '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m,mode=1777', '--tmpfs', '/run:rw,nosuid,nodev,size=8m,mode=755', '--mount', `type=volume,src=${names.volume},dst=/data`, '--mount', `type=bind,src=${names.edge},dst=/run/donebot`, '--env', 'DONEBOT_TUNNEL_SOCKET=/run/donebot/http.sock', '--env', 'DONEBOT_PORT=18899', '--env', 'DONEBOT_WEBHOOK_PORT=18900', ...(team ? teamEnvironment(team).flatMap(entry => ['--env', entry]) : this.gatewayRequired ? ['--env', 'DONEBOT_CLOUD_CREDENTIAL_FILE=/run/donebot/gateway.json'] : []), ...(this.desktops ? ['--env', 'DONEBOT_CLOUD_DESKTOP_SOCKET=/run/donebot/cloud-desktop.sock'] : []), this.image]);
       container = await this.inspect('container', names.container); this.checkContainer(container, id, names);
     }
     if (this.disks) this.checkVolume(await this.inspect('volume', names.volume), id);
@@ -272,8 +277,10 @@ export class DockerRuntime {
       await this.docker(['version', '--format', '{{.Server.Version}}']);
       const filesystem = statfsSync(this.stateDir), available = filesystem.bavail * filesystem.bsize;
       const desktop = this.desktops ? await this.desktops.imageReady() : true;
-      const team = this.teamsEnabled && (await this.inspect('image', this.image))?.Config?.Labels?.['cn.donebot.teams.protocol'] === TEAM_PROTOCOL;
-      return { ready: available > 512 * 1024 ** 2 && desktop, docker: true, desktop_image_ready: desktop, ...(team ? { team_protocol: TEAM_PROTOCOL } : {}), disk_available_bytes: available };
+      const appArmor = this.teamSecurity ? this.teamSecurity.readAppArmor(this.teamSecurity.profile) : null;
+      const appArmorReady = !appArmor || !appArmor.enabled || appArmor.profileLoaded;
+      const team = this.teamsEnabled && appArmorReady && (await this.inspect('image', this.image))?.Config?.Labels?.['cn.donebot.teams.protocol'] === TEAM_PROTOCOL;
+      return { ready: available > 512 * 1024 ** 2 && desktop, docker: true, desktop_image_ready: desktop, ...(this.teamsEnabled ? { team_apparmor_ready: appArmorReady } : {}), ...(team ? { team_protocol: TEAM_PROTOCOL } : {}), disk_available_bytes: available };
     } catch { return { ready: false, docker: false }; }
   }
   async purge(id) {

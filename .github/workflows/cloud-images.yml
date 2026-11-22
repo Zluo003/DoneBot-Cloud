@@ -82,13 +82,24 @@ jobs:
         run: |
           set -euo pipefail
           source "$BUNDLE/agent-images.env"
+          # 1. Default Docker profile must fail closed (exit 2 / 503).
           set +e
-          node sources/DoneBot/scripts/verify-team-linux.mjs --image "$CLOUD_DONEBOT_IMAGE" | tee "$BUNDLE/team-verification.jsonl"
-          rc=${PIPESTATUS[0]}
+          node sources/DoneBot/scripts/verify-team-linux.mjs --image "$CLOUD_DONEBOT_IMAGE" | tee "$BUNDLE/team-default-failclosed-verification.jsonl"
+          rc_default=${PIPESTATUS[0]}
           set -e
-          echo "team_isolation_exit=$rc" >> "$GITHUB_STEP_SUMMARY"
-          if [[ "$rc" != "0" && "$rc" != "2" ]]; then
-            exit "$rc"
+          test "$rc_default" -eq 2
+          # 2. Install minimal-privilege team AppArmor profile and verify full bot-box isolation passes (exit 0).
+          sudo bash deploy/security/install-team-apparmor.sh
+          set +e
+          node sources/DoneBot/scripts/verify-team-linux.mjs \
+            --image "$CLOUD_DONEBOT_IMAGE" \
+            --seccomp "$PWD/deploy/security/team-seccomp.json" \
+            --apparmor donebot-team-container | tee "$BUNDLE/team-verification.jsonl"
+          rc_team=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc_team" -ne 0 ]; then
+            sudo dmesg | grep -iE 'apparmor|seccomp|audit' | tail -n 40 || true
+            exit "$rc_team"
           fi
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:

@@ -1,5 +1,38 @@
 # 隔离验证记录
 
+## 2026-11-17：Cloud 自动续费独立于已付费服务
+
+用户取消自动续费仅关闭下个周期的自动扣款，不停机、不改变当前 paid_until；
+有效期内 `keep` 恢复自动续费不立即收费，到期后需明确购买新的 Cloud 服务。
+DoneBot 客户端与网关网页均移除“停机并保留数据”，有效期内显示“自动续费”，
+到期后显示“购买 Cloud 云主机”。下文历史记录中的取消停机、重新扣款不再是
+当前用户取消续费的行为。
+
+- 私有 PostgreSQL 集成测试通过，包含已运行及启动中实例取消续费、不变的运行
+  代次和付费期限、幂等及归属验证、恢复续费不扣款、到期无自动扣款、拒绝到期
+  `keep`，以及明确重新购买后的新周期和续费设置。
+- 迁移 269 用合成历史取消记录验证：只恢复有当前周期扣款且未退款的订阅；
+  仍在付费期的旧取消停机实例恢复运行意图，旧代次失效，自动续费仍关闭；
+  不恢复已退款订阅，付费期内再次走购买检查也不增加扣款。
+- 主控配合两个真实 Node worker/agent 的隔离 fixture 验证取消、恢复、再次取消
+  后租约与运行状态不变，私有 HTTP、网页会话 Cookie、已有 API 和网页
+  WebSocket 继续可用；随后到期断连、停机、保留期、回收及另一用户隔离回归通过。
+- DoneBot 的真实隔离服务 E2E、Cloud 路由和真实 React 面板 DOM 共 24 项通过；
+  网关 Cloud 网页 7 项通过，前后端类型检查及修改文件 lint 通过。
+- `go test ./internal/cloudbilling ./internal/handler ./internal/server/routes` 通过。
+  `node --check test/master-worker.mjs` 与发布候选脚本语法检查通过。
+
+集成测试复现命令（在相邻 donebot-api/backend）：
+
+```sh
+CLOUD_BILLING_PG_FIXTURE=1 CLOUD_BILLING_NODE_FIXTURE=1 go test -tags integration ./internal/cloudbilling -count=1 -timeout=4m
+```
+
+PostgreSQL 由测试创建，仅监听私有临时 Unix socket；所有账号、余额和凭据为合成数据。
+本轮未启用可选的真实 DoneBot 浏览器/模型集成项，未重新验证 Linux 容器隔离或
+打包客户端 GUI，未连接生产服务。尚未部署或重新打包；需要更新网关（含迁移 269）、
+网页前端及客户端，节点生产代码无须为此升级。
+
 ## 2026-11-17：可切换编程执行器镜像
 
 [run 44026237249](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44026237249) 首次执行成功，DoneBot 固定为 `1339d9acae44311b29e1dc9f196a6591ad571adc`，Cloud 构建代码为 `e8fcf21559d6e228fb884a7d055b0884336f507d`，平台 `linux/amd64`。新增受管理 Codex／Claude Code 编程执行器，支持选择 DoneBot 网关或自有订阅、保留对话切换来源，复用项目目录、停止、审批和 Bot 委派机制。

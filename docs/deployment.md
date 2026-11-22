@@ -4,7 +4,7 @@ Docker、受控出口、存储/备份、浏览器、故障恢复与 systemd 生�
 
 ## 主控：donebot-api
 
-1. 按网关已有方式发布包含 Cloud 改动的后端和前端，启用 `donebot.enabled`。sh 安装的现有网关按下节使用后台在线更新；正式二进制内嵌前端和迁移。迁移 `260_donebot_cloud_subscriptions.sql`、`261_donebot_cloud_control.sql`、`262_donebot_cloud_browser.sql`、`263_donebot_cloud_runtime.sql`、`264_donebot_cloud_node_deletion.sql` 随网关启动时的正常迁移机制执行，无需手工执行 SQL；本轮未对生产数据库执行。先备份网关数据库及密钥，再按正常发布流程迁移。
+1. 按网关已有方式发布包含 Cloud 改动的后端和前端，启用 `donebot.enabled`。sh 安装的现有网关按下节使用后台在线更新；正式二进制内嵌前端和迁移。迁移 `260_donebot_cloud_subscriptions.sql`、`261_donebot_cloud_control.sql`、`262_donebot_cloud_browser.sql`、`263_donebot_cloud_runtime.sql`、`264_donebot_cloud_node_deletion.sql`、`269_donebot_cloud_auto_renew.sql` 随网关启动时的正常迁移机制执行，无需手工执行 SQL；本轮未对生产数据库执行。先备份网关数据库及密钥，再按正常发布流程迁移。
 2. 通过部署密钥管理注入 `DONEBOT_CLOUD_SIGNING_SEED`：32 字节随机 Ed25519 seed 的标准 Base64，只保存在主控。多副本主控使用同一 seed。可用 `node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64"))'` 生成后存入私有密钥文件，不加入版本库、终端录屏或共享日志。
 3. 在独立的“Cloud 管理”导航选择“套餐与保留”，设置月费和保留天数（默认 7），先保持套餐关闭；节点和隔离预发布验收完成后再启用。金额单位沿用账户余额，非新增货币单位。
 4. 每台服务器登记名称、私网 HTTPS origin、实例名额。保存一次性显示的独立节点 token、node ID，以及主控公钥。主控公钥在节点区持续显示，添加和轮换令牌响应也直接附带公钥，填入节点 `worker.env` 的 `CLOUD_MASTER_PUBLIC_KEY`。后台可轮换或撤销节点令牌；旧令牌立即失效，轮换所得新令牌仅显示一次，写入该节点配置后重启 worker。撤销同时暂停新分配，已有实例会在租约失效后停机，数据仍留原节点。
@@ -64,7 +64,7 @@ EnvironmentFile=-/etc/sub2api/environment
 
 修改 unit/drop-in 后执行 `sudo systemctl daemon-reload`。这种补充方式保留原 unit 的用户、监听端口、目录和在线重启设置，不用重新运行完整安装流程。
 
-**更新端：继续使用现有后台。** 备份数据库后，点击侧栏版本号 → 检查更新 → 立即更新 → 立即重启。正式二进制带 `embed` 前端，替换程序后会同时切换 Cloud 页面；重启时自动依序应用尚未执行的迁移，包括 260–264，不单独上传前端或重复导入 SQL。若另外配置过静态前端覆盖目录或独立前端反向代理，需同步更新该部署，避免继续展示旧页面。
+**更新端：继续使用现有后台。** 备份数据库后，点击侧栏版本号 → 检查更新 → 立即更新 → 立即重启。正式二进制带 `embed` 前端，替换程序后会同时切换 Cloud 页面；重启时自动依序应用尚未执行的迁移，包括 Cloud 的 260–264、269，不单独上传前端或重复导入 SQL。若另外配置过静态前端覆盖目录或独立前端反向代理，需同步更新该部署，避免继续展示旧页面。
 
 仅修改环境文件而不升级版本时，在维护窗口执行 `sudo systemctl restart sub2api` 使新环境生效。正常在线升级时的“立即重启”同样会重新加载环境；以后不再改变 unit 时无需重复执行 `daemon-reload`。可查看启动结果：
 
@@ -291,7 +291,7 @@ Docker 仍保持 `restart=no`，避免 Docker daemon 重启时绕过租约直接
 | --- | --- |
 | 用户 | `GET /donebot/cloud/plan` |
 | 用户 | `GET/POST /donebot/cloud/instances` |
-| 用户 | `POST /donebot/cloud/instances/:id/start|stop|cancel` |
+| 用户 | `POST /donebot/cloud/instances/:id/start|stop|cancel|keep` |
 | 用户 | `GET /donebot/cloud/instances/:id/operations` |
 | 用户 | `ANY /donebot/cloud/instances/:id/proxy/*path`，含 WS |
 | 用户 | `POST /donebot/cloud/instances/:id/browser-launch|desktop-launch` |
@@ -303,7 +303,9 @@ Docker 仍保持 `restart=no`，避免 Docker daemon 重启时绕过租约直接
 | 现有管理后台 | `POST /admin/donebot/cloud/nodes/:node/credential`，正文 `{revoke:boolean}` |
 | 现有管理后台 | `GET /admin/donebot/cloud/instances`、`GET .../events` |
 
-管理变更使用既有管理员鉴权及 step-up。实例接口的 `stop` 只停机保留数据；`cancel` 停机并取消订阅；自动删除根据订阅 paid_until 加后台保留天数计算。没有向用户开放任意镜像、挂载、Docker 参数、shell 或节点执行入口。
+管理变更使用既有管理员鉴权及 step-up。实例接口的 `cancel` 仅将 `auto_renew` 设为 false，`keep` 仅在已付费期限内恢复自动续费；两者不派发节点命令、不改变付费截止时间、不立即扣款。`stop` 保留为兼容接口，用户界面不再提供停机按钮。到期未续费才关闭访问并停机，自动删除根据订阅 paid_until 加后台保留天数计算。没有向用户开放任意镜像、挂载、Docker 参数、shell 或节点执行入口。
+
+续费修复需发布网关后端及前端（含迁移 269），并重新打包客户端；节点生产协议不变，无须为本修复更换运行服务或桌面镜像。迁移只为未退款、未进入删除且仍在付费期的旧版取消实例恢复运行意图，保留自动续费关闭状态；旧代次命令失效后由现有 Sweep 恢复启动，不增加扣款。已退款订阅不恢复，历史重复购买费用不在迁移中自动调整。
 
 ## 节点镜像滚动升级
 

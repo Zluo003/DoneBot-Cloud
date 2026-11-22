@@ -48,6 +48,22 @@ try {
   assert.equal((await api(config.users.a, pathA)).value.value, 'A-private');
   const stream = new WebSocket(config.masterOrigin.replace('http:', 'ws:') + `/fixture/instances/${a.id}/proxy/api/ws`, { headers: { authorization: `Bearer ${config.users.a}` } }); await once(stream, 'open'); const closed = once(stream, 'close');
   const browserStream = new WebSocket(browser.wsURL, browser.wsOptions); await once(browserStream, 'open'); const browserClosed = once(browserStream, 'close');
+  const generation = (await api(config.users.a, `/fixture/instances/${a.id}`)).value.data.generation;
+  for (const [index, action] of ['cancel', 'keep', 'cancel'].entries()) {
+    const changed = await api(config.users.a, `/fixture/instances/${a.id}/${action}`, {}, 'POST', 'renewal-' + index);
+    assert.equal(changed.status, 200); assert.equal(changed.value.data.operation.state, 'succeeded');
+    assert.equal(changed.value.data.instance.auto_renew, action === 'keep');
+    assert.equal(changed.value.data.instance.generation, generation);
+    assert.equal(changed.value.data.instance.paid_until, liveA.paid_until);
+    await nodeA.worker.poll();
+    assert.equal((await nodeA.runtime.status(a.id)).state, 'running');
+    assert.equal((await api(config.users.a, pathA)).value.value, 'A-private');
+    assert.equal((await browserRequest(config.masterOrigin, browser.url, '/api/value', { cookie: browser.cookie })).status, 200);
+    for (const ws of [stream, browserStream]) {
+      assert.equal(ws.readyState, WebSocket.OPEN); ws.send('renewal-still-connected');
+      assert.equal((await once(ws, 'message'))[0].toString(), 'renewal-still-connected');
+    }
+  }
   await api(config.adminToken, '/fixture/admin/expire', { instance_id: a.id, days: 0 }); await Promise.all([closed, browserClosed]);
   assert.equal((await browserRequest(config.masterOrigin, browser.url, '/api/value', { cookie: browser.cookie })).status, 403);
   await until(async () => (await nodeA.runtime.status(a.id)).state === 'stopped', 'expiry stop'); await access(join(nodeA.root, a.id + '.json'));
@@ -60,7 +76,7 @@ try {
   await until(async () => (await api(config.users.a, `/fixture/instances/${a.id}`)).status === 404, 'deletion complete');
   await assert.rejects(access(join(nodeA.root, a.id + '.json')));
   assert.equal((await api(config.users.b, pathB)).value.value, 'B-private');
-  console.log(JSON.stringify({ result: 'two_workers_passed', postgresAuthority: true, capacity: true, crossUserHttpAndWebSocket: true, browserSingleUseLaunch: true, browserCookieHttpAndWebSocket: true, browserCrossTenantAndOriginDenied: true, browserRevocationDisconnect: true, browserExpiryDisconnect: true, workerRestart: true, expiryDisconnect: true, retainedBeforeDeadline: true, purgeFailureRetry: true, unrelatedUserDataRetained: true, actualLinuxContainers: false }));
+  console.log(JSON.stringify({ result: 'two_workers_passed', postgresAuthority: true, capacity: true, crossUserHttpAndWebSocket: true, browserSingleUseLaunch: true, browserCookieHttpAndWebSocket: true, browserCrossTenantAndOriginDenied: true, browserRevocationDisconnect: true, browserExpiryDisconnect: true, renewalToggleKeepsPaidRuntimeAndConnections: true, workerRestart: true, expiryDisconnect: true, retainedBeforeDeadline: true, purgeFailureRetry: true, unrelatedUserDataRetained: true, actualLinuxContainers: false }));
 } finally {
   for (const n of nodes) { await n.worker.close(); await n.agent.close(); }
   await rm(dir, { recursive: true, force: true });

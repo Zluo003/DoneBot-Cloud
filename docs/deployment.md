@@ -4,7 +4,7 @@ Docker、受控出口、存储/备份、浏览器、故障恢复与 systemd 生�
 
 ## 主控：donebot-api
 
-1. 按网关已有方式发布包含 Cloud 改动的后端和前端，启用 `donebot.enabled`。sh 安装的现有网关按下节使用后台在线更新；正式二进制内嵌前端和迁移。迁移 `260_donebot_cloud_subscriptions.sql`、`261_donebot_cloud_control.sql`、`262_donebot_cloud_browser.sql`、`263_donebot_cloud_runtime.sql`、`264_donebot_cloud_node_deletion.sql`、`269_donebot_cloud_auto_renew.sql` 随网关启动时的正常迁移机制执行，无需手工执行 SQL；本轮未对生产数据库执行。先备份网关数据库及密钥，再按正常发布流程迁移。
+1. 按网关已有方式发布包含 Cloud 改动的后端和前端，启用 `donebot.enabled`。sh 安装的现有网关按下节使用后台在线更新；正式二进制内嵌前端和迁移。迁移 `260_donebot_cloud_subscriptions.sql`、`261_donebot_cloud_control.sql`、`262_donebot_cloud_browser.sql`、`263_donebot_cloud_runtime.sql`、`264_donebot_cloud_node_deletion.sql`、`269_donebot_cloud_auto_renew.sql`、`279_donebot_cloud_bot_links.sql` 随网关启动时的正常迁移机制执行，无需手工执行 SQL；本轮未对生产数据库执行。先备份网关数据库及密钥，再按正常发布流程迁移。
 2. 通过部署密钥管理注入 `DONEBOT_CLOUD_SIGNING_SEED`：32 字节随机 Ed25519 seed 的标准 Base64，只保存在主控。多副本主控使用同一 seed。可用 `node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64"))'` 生成后存入私有密钥文件，不加入版本库、终端录屏或共享日志。
 3. 在独立的“Cloud 管理”导航选择“套餐与保留”，设置月费和保留天数（默认 7），先保持套餐关闭；节点和隔离预发布验收完成后再启用。金额单位沿用账户余额，非新增货币单位。
 4. 每台服务器登记名称、私网 HTTPS origin、实例名额。保存一次性显示的独立节点 token、node ID，以及主控公钥。主控公钥在节点区持续显示，添加和轮换令牌响应也直接附带公钥，填入节点 `worker.env` 的 `CLOUD_MASTER_PUBLIC_KEY`。后台可轮换或撤销节点令牌；旧令牌立即失效，轮换所得新令牌仅显示一次，写入该节点配置后重启 worker。撤销同时暂停新分配，已有实例会在租约失效后停机，数据仍留原节点。
@@ -64,7 +64,7 @@ EnvironmentFile=-/etc/sub2api/environment
 
 修改 unit/drop-in 后执行 `sudo systemctl daemon-reload`。这种补充方式保留原 unit 的用户、监听端口、目录和在线重启设置，不用重新运行完整安装流程。
 
-**更新端：继续使用现有后台。** 备份数据库后，点击侧栏版本号 → 检查更新 → 立即更新 → 立即重启。正式二进制带 `embed` 前端，替换程序后会同时切换 Cloud 页面；重启时自动依序应用尚未执行的迁移，包括 Cloud 的 260–264、269，不单独上传前端或重复导入 SQL。若另外配置过静态前端覆盖目录或独立前端反向代理，需同步更新该部署，避免继续展示旧页面。
+**更新端：继续使用现有后台。** 备份数据库后，点击侧栏版本号 → 检查更新 → 立即更新 → 立即重启。正式二进制带 `embed` 前端，替换程序后会同时切换 Cloud 页面；重启时自动依序应用尚未执行的迁移，包括 Cloud 的 260–264、269、279，不单独上传前端或重复导入 SQL。若另外配置过静态前端覆盖目录或独立前端反向代理，需同步更新该部署，避免继续展示旧页面。
 
 仅修改环境文件而不升级版本时，在维护窗口执行 `sudo systemctl restart sub2api` 使新环境生效。正常在线升级时的“立即重启”同样会重新加载环境；以后不再改变 unit 时无需重复执行 `daemon-reload`。可查看启动结果：
 
@@ -117,7 +117,7 @@ sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sh
 sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:53a3b6e0ff156fd1461c8e25c72ad160d5ca2faca7845e4a7f5b165aaac16fe5
 ```
 
-镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应更新至 `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01` 或后续兼容版本，已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。个人 Cloud 资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费、真实 Linux 团队用户命名空间沙箱或目标节点状态。
+镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应更新至包含本机与 Cloud 协作代理透传（`bot-link`）的最新 `main` 版本并重启 `donebot-cloud-agent` 与 `donebot-cloud-worker`（仅升级节点代码不需重建已有 `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1` 双镜像）；已有实例如需更换镜像，按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。个人 Cloud 资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费、真实 Linux 团队用户命名空间沙箱或目标节点状态。
 
 #### 团队运行时开关（默认关闭）
 

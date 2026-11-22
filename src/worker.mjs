@@ -3,7 +3,7 @@ import { createPublicKey, verify } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Fault, body, close, hash, instanceID, json, listen, privateDir, socketJSON } from './common.mjs';
-import { httpProxy, proxyHeaders, safePath, wsProxy, wsServer } from './proxy.mjs';
+import { httpProxy, isBotLinkDataPath, proxyHeaders, safePath, wsProxy, wsServer } from './proxy.mjs';
 import { errorFields, masterFailure } from './worker-errors.mjs';
 import { readRunLeases, runLeaseValid, runLeaseUntil } from './run-lease.mjs';
 import { TEAM_PROTOCOL, teamCoordinatorConfiguration } from './team-runtime.mjs';
@@ -79,7 +79,7 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
   for (const id of owned) await execute(id, 'stop');
   function grant(req) {
     const match = /^\/v1\/instances\/([^/]+)\/proxy(\/.*)$/.exec(req.url); if (!match) throw new Fault(404, 'not_found');
-    const id = instanceID(match[1]); safePath(match[2]);
+    const id = instanceID(match[1]), proxyPath = safePath(match[2]), pathname = proxyPath.split('?')[0];
     const encoded = req.headers['x-cloud-grant']; if (typeof encoded !== 'string' || encoded.length > 4096) throw new Fault(401, 'grant_required');
     const parts = encoded.split('.'); if (parts.length !== 2) throw new Fault(401, 'invalid_grant');
     const payload = Buffer.from(parts[0], 'base64url');
@@ -87,7 +87,13 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
     let value; try { value = JSON.parse(payload); } catch { throw new Fault(401, 'invalid_grant'); }
     if (value.node_id !== nodeId || value.instance_id !== id || value.request_hash !== hash(req.method + '\n' + req.url) || !Number.isSafeInteger(value.expires) || value.expires * 1000 <= Date.now() || value.expires * 1000 > Date.now() + 30000 || !allowed(id) || !started.has(id)) throw new Fault(403, 'instance_not_authorized');
     const origin = req.headers['x-cloud-origin']; if (origin !== masterOrigin) throw new Fault(403, 'origin_forbidden');
-    return { id, origin };
+    let botLinkToken = null;
+    if (value.bot_link_token_hash !== undefined) {
+      const candidate = req.headers['x-donebot-bot-link-token'];
+      if (typeof value.bot_link_token_hash !== 'string' || !isBotLinkDataPath(pathname, req.method) || typeof candidate !== 'string' || candidate.length < 16 || candidate.length > 512 || hash(candidate) !== value.bot_link_token_hash) throw new Fault(403, 'invalid_bot_link_grant');
+      botLinkToken = candidate;
+    }
+    return { id, origin, botLinkToken };
   }
   function track(id) { return kill => { const item = { id, kill }; streams.add(item); return () => streams.delete(item); }; }
   const server = createServer(async (req, res) => {
@@ -97,7 +103,7 @@ export async function createWorker({ masterOrigin, nodeId, nodeToken, publicKey,
       const master = Date.now() - lastMasterContact < 30000, ready = !stopped && agent && master;
       return json(res, ready ? 200 : 503, { ready, master, agent });
     }
-    try { const { id, origin } = grant(req), headers = proxyHeaders(req, origin); headers['x-cloud-origin'] = origin; if (teamsEnabled && typeof req.headers['x-donebot-team-grant'] === 'string') headers['x-donebot-team-grant'] = req.headers['x-donebot-team-grant']; httpProxy(req, res, { socketPath: agentSocket, path: req.url }, headers, track(id)); }
+    try { const { id, origin, botLinkToken } = grant(req), headers = proxyHeaders(req, origin); headers['x-cloud-origin'] = origin; if (teamsEnabled && typeof req.headers['x-donebot-team-grant'] === 'string') headers['x-donebot-team-grant'] = req.headers['x-donebot-team-grant']; if (botLinkToken) headers['x-donebot-bot-link-token'] = botLinkToken; httpProxy(req, res, { socketPath: agentSocket, path: req.url }, headers, track(id)); }
     catch (e) { res.writeHead(e.status || 503, { 'cache-control': 'no-store' }); res.end(); }
   });
   server.on('upgrade', (req, socket, head) => {

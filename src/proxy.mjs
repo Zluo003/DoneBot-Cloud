@@ -5,10 +5,15 @@ import { Fault } from './common.mjs';
 // Credentials and forwarding headers are reconstructed at each trust boundary.
 export function proxyHeaders(req, origin, bearer) {
   const headers = { host: new URL(origin).host, 'x-forwarded-proto': new URL(origin).protocol.slice(0, -1) };
-  for (const name of ['content-type', 'accept', 'range', 'if-range', 'if-none-match', 'last-event-id', 'user-agent']) if (typeof req.headers[name] === 'string') headers[name] = req.headers[name];
+  for (const name of ['content-type', 'accept', 'range', 'if-range', 'if-none-match', 'last-event-id', 'user-agent', 'x-donebot-bot-link', 'x-omb-background']) if (typeof req.headers[name] === 'string') headers[name] = req.headers[name];
   if (req.headers.origin) headers.origin = origin;
   if (bearer) headers.authorization = `Bearer ${bearer}`;
   return headers;
+}
+export function isBotLinkDataPath(pathname, method) {
+  if (pathname === '/api/bot-link/sync') return method === 'POST';
+  if (pathname === '/api/bot-link/file') return method === 'GET' || method === 'PUT';
+  return false;
 }
 export function safePath(path) {
   if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || /[\r\n\x00]/.test(path)) throw new Fault(400, 'invalid_proxy_path');

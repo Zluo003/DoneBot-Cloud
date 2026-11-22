@@ -8,14 +8,15 @@ import { Fault, close, listen } from '../src/common.mjs';
 import { httpProxy, wsProxy, wsServer } from '../src/proxy.mjs';
 
 export class DoneBotFixtureRuntime {
-  constructor(dir, source = '/Users/zluo/Dev/DoneBot', { staticDir, gatewayOrigin, onGateway } = {}) { this.dir = dir; this.source = resolve(source); this.staticDir = staticDir; this.gatewayOrigin = gatewayOrigin; this.onGateway = onGateway; this.gateways = new Map(); this.instances = new Map(); }
+  constructor(dir, source = '/Users/zluo/Dev/DoneBot', { staticDir, gatewayOrigin, onGateway, scripted = false } = {}) { this.dir = dir; this.source = resolve(source); this.staticDir = staticDir; this.gatewayOrigin = gatewayOrigin; this.onGateway = onGateway; this.scripted = scripted; this.gateways = new Map(); this.instances = new Map(); }
   configureGateway(id, value) { if (value.installationId !== id) throw new Fault(400, 'fixture_gateway_scope'); this.gateways.set(id, value); this.onGateway?.(value); }
+  instanceInfo(id) { return this.instances.get(id)?.fixture?.info ?? null; }
   async start(id) {
     let entry = this.instances.get(id);
     if (entry?.running) return entry.target;
     const control = await import(pathToFileURL(join(this.source, 'scripts/control-omb.ts')).href);
     if (!entry) {
-      const fixture = await control.launchVerificationServer({ DONEBOT_DEV_TRUST_LOCAL_BROWSER: '0' }, undefined, undefined, undefined, undefined, undefined, [], undefined, this.staticDir, this.gatewayOrigin, this.gateways.get(id));
+      const fixture = await control.launchVerificationServer({ DONEBOT_DEV_TRUST_LOCAL_BROWSER: '0' }, undefined, undefined, undefined, undefined, this.scripted ? { scripted: true } : undefined, [], undefined, this.staticDir, this.gatewayOrigin, this.gateways.get(id));
       entry = { fixture, child: fixture.child, port: Number(new URL(fixture.info.url).port) }; this.instances.set(id, entry);
     } else {
       const log = openSync(entry.fixture.info.logPath, 'a', 0o600);

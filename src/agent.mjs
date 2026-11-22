@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { chmodSync, chownSync, existsSync, lstatSync, unlinkSync } from 'node:fs';
 import { connect } from 'node:net';
 import { Fault, body, close, fail, instanceID, json, listen } from './common.mjs';
-import { httpProxy, proxyHeaders, safePath, wsProxy, wsServer } from './proxy.mjs';
+import { httpProxy, isBotLinkDataPath, proxyHeaders, safePath, wsProxy, wsServer } from './proxy.mjs';
 import { MAX_RUN_LEASE_MS, runLeaseDeadline, runLeaseValid } from './run-lease.mjs';
 import { teamRequest } from './team-runtime.mjs';
 
@@ -116,7 +116,9 @@ export async function createAgent({ socketPath, runtime, publicOrigin, developme
       }
       const pinned = runtime.pinSocket?.(id);
       try {
-        const headers = proxyHeaders(req, value.origin, value.team ? undefined : value.token);
+        const rawBotLink = !value.team && isBotLinkDataPath(pathname, req.method) ? req.headers['x-donebot-bot-link-token'] : undefined;
+        const botLinkToken = typeof rawBotLink === 'string' && rawBotLink.length >= 16 && rawBotLink.length <= 512 ? rawBotLink : null;
+        const headers = proxyHeaders(req, value.origin, value.team ? undefined : botLinkToken || value.token);
         if (value.member) headers['x-donebot-team-grant'] = value.member.token;
         const outgoing = httpProxy(req, res, { socketPath: pinned?.socketPath || value.socketPath, path }, headers, track(id));
         outgoing.once('close', () => pinned?.release());

@@ -128,29 +128,76 @@ sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sh
   - `deploy/security/install-team-apparmor.sh`：基于官方 Moby `docker-default` 派生最小权限 AppArmor profile `donebot-team-container`（保留全部 `/proc`、`/sys`、废弃网络协议族、`AF_ALG`/`AF_VSOCK`、信号与 `ptrace` 限制，并在内核 LSM 层用显式 `deny rwklx` / `deny w` 接管 Docker 全部 `MaskedPaths` 与 `ReadonlyPaths`，仅放行命名空间内 `mount`/`pivot_root` 及 AppArmor 4+ 所需的 `userns`/`unix`），自动兼容 **Debian 12（AppArmor 3.0.x）** 与 **Ubuntu 24.04+（AppArmor 4.x）**。
   - Linux 内核 `mount_too_revealing()` 要求 `/proc` 上不能有遮蔽覆盖挂载才允许非特权 `bwrap --proc /proc`，因此团队容器在且**仅在**宿主机已加载 `donebot-team-container (enforce)` 且通过最小权限 `team-seccomp.json` 校验时，附带 `--security-opt systempaths=unconfined`，由 `donebot-team-container` AppArmor LSM 规则跨命名空间强制承接全部 `/proc` 与 `/sys` 防护；未启用 AppArmor 或未加载该 profile 的宿主机禁止开启团队能力。
 
-在 **Debian 12**（或 Ubuntu）节点开启团队能力前的标准操作：
+在 **Debian 12**（或 Ubuntu 24.04+）节点部署并开启团队能力的完整步骤：
+
+##### 1. 准备宿主机 AppArmor、节点代码与最新镜像（不停机）
 
 ```sh
-# 1. 确认内核允许非特权 user namespace，且安装 apparmor 包（Debian 12 精简镜像可能未预装 apparmor_parser）
+# 1.1 安装并启用 apparmor 服务（Debian 12 精简镜像可能未预装 apparmor_parser；开机自启保证重启后自动重载）
 sudo apt-get update && sudo apt-get install -y apparmor
 sudo systemctl enable --now apparmor
 
-# 2. 安装并加载最小权限团队 AppArmor profile（默认写入 /etc/apparmor.d/donebot-team-container）
+# 1.2 更新受信节点代码至 6c847feaed2978a215310da954df5752c7882232 或更新提交
 cd /opt/donebot-cloud
-sudo bash deploy/security/install-team-apparmor.sh
+sudo git pull --ff-only
+sudo npm ci --omit=dev
 
-# 3. 确认已进入 enforce 模式
+# 1.3 安装并加载最小权限团队 AppArmor profile（自动按 Debian 12 AppArmor 3.0 或 Ubuntu 4.0 生成）
+sudo bash /opt/donebot-cloud/deploy/security/install-team-apparmor.sh
 sudo grep '^donebot-team-container (enforce)$' /sys/kernel/security/apparmor/profiles
 
-# 4. 在该节点执行真实 Linux 隔离验收（要求退出码为 0、box-check 全部通过且 readiness.ready=true）
-sudo node /path/to/verify-team-linux.mjs \
-  --image "$CLOUD_DONEBOT_IMAGE" \
-  --seccomp /opt/donebot-cloud/deploy/security/team-seccomp.json \
-  --apparmor donebot-team-container
+# 1.4 提前拉取最新已验证 amd64 双镜像（含 bot-box 自检所需的 python3）
+NEW_SERVICE="ghcr.io/zluo003/donebot-cloud-service@sha256:3c4983ead3ba11154fc2c0a2bb537aa2c6630a472eae966363e822503ccf6e47"
+NEW_DESKTOP="ghcr.io/zluo003/donebot-cloud-desktop@sha256:a7ccc479457051adb041dff6a6429bc8d490150e0c3f52de41b92d833d30a955"
+sudo docker pull --platform linux/amd64 "$NEW_SERVICE"
+sudo docker pull --platform linux/amd64 "$NEW_DESKTOP"
 ```
 
+##### 2. 在目标节点现场执行团队隔离验收（要求退出码为 `0`）
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Zluo003/donebot/e117b44e74eb67b610f8b4b8268294658e717a43/scripts/verify-team-linux.mjs -o /tmp/verify-team-linux.mjs
+sudo node /tmp/verify-team-linux.mjs \
+  --image "$NEW_SERVICE" \
+  --seccomp /opt/donebot-cloud/deploy/security/team-seccomp.json \
+  --apparmor donebot-team-container
+echo "exit_code=$?"
+rm -f /tmp/verify-team-linux.mjs
+```
+
+- 验收标准：`exit_code=0`，输出 JSON 中 `container.probe.passed == container.probe.total`（32/32、`failed: []`）且 `container.readiness.ready == true`。
 - 宿主机未启用 Linux AppArmor LSM 或未加载 `donebot-team-container (enforce)` 时，`agent` 健康检查自动返回 `team_apparmor_ready: false` 且不声明 `team_protocol`，启动团队容器会安全失败（`503 team_apparmor_profile_missing`），绝不会在缺少 AppArmor 保护时启用 `systempaths=unconfined`。
-- 上述节点自检返回退出码 `0` 且网关侧显式开放团队能力后，在 `/etc/donebot-cloud/agent.env` 与 `/etc/donebot-cloud/worker.env` 同时设置 `CLOUD_TEAMS_ENABLED=1`，并在 `agent.env` 填入与 `worker.env` 相同的 `CLOUD_MASTER_PUBLIC_KEY`（主控 Ed25519 公钥），随后维护重启 `donebot-cloud-agent` 与 `donebot-cloud-worker` 即可。可选环境变量：`CLOUD_TEAM_SECCOMP_PATH`（默认仓库内 `deploy/security/team-seccomp.json`）、`CLOUD_TEAM_APPARMOR_PROFILE`（默认 `donebot-team-container`）。
+
+##### 3. 维护窗口受控升级并开启团队开关
+
+仅在上面第 2 步返回 `exit_code=0` 且网关侧显式开放团队能力后执行：
+
+1. 在管理后台暂停该节点新分配，并记录已有运行/桌面容器的实际旧摘要；
+2. 依次停止 `donebot-cloud-worker` 与 `donebot-cloud-agent`，确认 `ExecStopPost` 停机成功：
+   ```sh
+   sudo systemctl stop donebot-cloud-worker
+   sudo systemctl stop donebot-cloud-agent
+   ```
+3. 将新双镜像摘要合入 `/etc/donebot-cloud/agent.env`（不要覆盖原文件其他配置），并按需开启团队变量：
+   - `/etc/donebot-cloud/agent.env` 增加：
+     ```dotenv
+     CLOUD_TEAMS_ENABLED=1
+     CLOUD_MASTER_PUBLIC_KEY=<与 worker.env 相同的主控 Ed25519 公钥>
+     ```
+     （可选覆盖：`CLOUD_TEAM_SECCOMP_PATH` 默认读取仓库内 `/opt/donebot-cloud/deploy/security/team-seccomp.json`，`CLOUD_TEAM_APPARMOR_PROFILE` 默认 `donebot-team-container`，通常无需手填。）
+   - `/etc/donebot-cloud/worker.env` 增加：
+     ```dotenv
+     CLOUD_TEAMS_ENABLED=1
+     ```
+4. 对该节点已有的个人实例按[节点镜像滚动升级](#节点镜像滚动升级)执行 `prepare-upgrade`（以及桌面镜像变更时的 `prepare-desktop-upgrade`），保留卷、磁盘、网络与安装凭据；
+5. 依次启动服务并核验就绪状态：
+   ```sh
+   sudo systemctl start donebot-cloud-agent
+   sudo systemctl start donebot-cloud-worker
+   sudo curl --fail --silent --show-error --unix-socket /run/donebot-cloud-agent/agent.sock http://localhost/healthz
+   curl --fail --silent --show-error http://127.0.0.1:18991/healthz
+   ```
+   确认 agent `/healthz` 返回 `"ready": true`、`"team_apparmor_ready": true`、`"team_protocol": "donebot.teams.v1"`，且 worker `/healthz` 返回 `"ready": true` 后，再恢复节点分配。
 
 #### 始终读取当前推荐清单
 
@@ -342,11 +389,11 @@ Docker 仍保持 `restart=no`，避免 Docker daemon 重启时绕过租约直接
 
 以本页“已发布的 amd64 镜像”及 `current-amd64.env` 为目标，不要把历史清单与当前配置相同误判为升级完成。
 
-| 核对项 | 上一推荐发布（2026-11-22 早前） | 本次发布（2026-11-22 跨端群聊） |
+| 核对项 | 上一推荐发布（2026-11-22 团队全链路） | 本次发布（2026-11-22 团队最小权限 `bot-box`） |
 | --- | --- | --- |
-| 服务摘要开头 | `336dfba641b5` | `25d8629d9f73` |
-| 同次桌面摘要开头 | `53a3b6e0ff15` | `54b50e479da5` |
-| DoneBot 源码 revision | `d5d455b` | `89af05b` |
+| 服务摘要开头 | `1a6dd3ed3614` | `3c4983ead3ba` |
+| 同次桌面摘要开头 | `31140be7a445` | `a7ccc4794570` |
+| DoneBot 源码 revision | `fa2e2ab` | `e117b44` |
 
 先根据实例 UUID、agent 的 deployment ID 和 `cn.donebot.cloud.*` 标签确认本节点的运行及桌面容器。对明确归属的运行容器执行只读检查，将 `SERVICE_CONTAINER_NAME` 换成其完整名称：
 
@@ -385,7 +432,7 @@ sudo systemctl start donebot-cloud-agent
 sudo systemctl start donebot-cloud-worker
 ```
 
-运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `89af05babccf8600003b7706b8e815ae55421e02`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
+运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `e117b44e74eb67b610f8b4b8268294658e717a43`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
 
 ### 手机中的 Cloud 显示离线
 
@@ -438,4 +485,4 @@ sudo /usr/bin/node --env-file=/etc/donebot-cloud/agent.env /opt/donebot-cloud/sr
 
 升级顺序为先安装 DoneBot 0.1.153 或后续兼容桌面客户端，再部署已发布的 `cloud-service` 服务镜像。旧桌面依赖云端静态页面，不能先切成 API 专用镜像。不要向已有 `server` 镜像仅删除目录来模拟升级。本次新摘要包含 Muse 的 4–10 秒能力登记（默认 6 秒）、PNG/JPEG 预处理和附件预算整理；11 月 15 日及更早的历史摘要不包含本次改动。
 
-当前推荐的服务和配套桌面镜像统一见本页[已发布的 amd64 镜像](#已发布的-amd64-镜像)（2026-11-22，DoneBot `89af05babccf8600003b7706b8e815ae55421e02`、Cloud `d344992546134f6dbcb27acb80d696fa97cec926`，详见[发布证据](verification/images-2026-11-22-bot-link-rooms-amd64.json)）。沿用既有保留数据的受控实例升级流程；此次仅发布镜像，没有升级生产实例。此前清单（如 `2026-11-22-upgrade-amd64.env`、`2026-11-19-devices-amd64.env`、`2026-11-17-artifacts-amd64.env`）保留供核对与回退。不得改写历史发布记录或使用未经发布验证的本地测试 image ID。API 拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。
+当前推荐的服务和配套桌面镜像统一见本页[已发布的 amd64 镜像](#已发布的-amd64-镜像)（2026-11-22，DoneBot `e117b44e74eb67b610f8b4b8268294658e717a43`、Cloud `6c847feaed2978a215310da954df5752c7882232`，详见[发布证据](verification/images-2026-11-22-teams-box-amd64.json)）。沿用既有保留数据的受控实例升级流程；此次仅发布镜像，没有升级生产实例。此前清单（如 `2026-11-22-teams-amd64.env`、`2026-11-22-bot-link-rooms-amd64.env`、`2026-11-22-upgrade-amd64.env`）保留供核对与回退。不得改写历史发布记录或使用未经发布验证的本地测试 image ID。API 拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。

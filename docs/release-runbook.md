@@ -4,7 +4,7 @@
 
 ## 已有节点的镜像更新
 
-当前推荐为 2026-11-22 发布的 `linux/amd64` API 专用双镜像，DoneBot 源码 `89af05babccf8600003b7706b8e815ae55421e02`、Cloud 验证提交 `d344992546134f6dbcb27acb80d696fa97cec926`（配套网关 Release `v0.4.56`，含兼容迁移 `271–278` 与协作配对迁移 `279`，团队能力默认关闭）；默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-bot-link-rooms-amd64.env](../deploy/images/2026-11-22-bot-link-rooms-amd64.env)，原始证据见 [发布记录](verification/images-2026-11-22-bot-link-rooms-amd64.json)。正式平台发布经真实 Linux 验证后推送 GHCR，节点直接在线拉取。
+当前推荐为 2026-11-22 发布的 `linux/amd64` API 专用双镜像，DoneBot 源码 `e117b44e74eb67b610f8b4b8268294658e717a43`、Cloud 验证提交 `6c847feaed2978a215310da954df5752c7882232`（配套网关 Release `v0.4.57`，含兼容迁移 `271–278` 与协作配对迁移 `279`，团队能力默认关闭）；默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-teams-box-amd64.env](../deploy/images/2026-11-22-teams-box-amd64.env)，原始证据见 [发布记录](verification/images-2026-11-22-teams-box-amd64.json)。正式平台发布经真实 Linux 验证（含团队最小权限 `bot-box` 32/32 隔离验收）后推送 GHCR，节点直接在线拉取；Debian 12 / Ubuntu 节点启用团队最小权限沙箱与现场验收步骤见 [部署文档](deployment.md#团队运行时开关与最小权限沙箱配置默认关闭)。
 
 已有付费实例按[节点镜像滚动升级](deployment.md#节点镜像滚动升级)维护，不重复执行下述首次发布的开通或数据库初始化步骤：
 

@@ -4,7 +4,7 @@
 
 ## 已有节点的镜像更新
 
-当前推荐为 2026-11-22 发布的 `linux/amd64` API 专用双镜像，DoneBot 源码 `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`、Cloud 验证提交 `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01`（配套网关 Release `v0.4.55`，含兼容迁移 `271–278` 且团队能力默认关闭）；默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-upgrade-amd64.env](../deploy/images/2026-11-22-upgrade-amd64.env)，原始证据见 [发布记录](verification/images-2026-11-22-upgrade-amd64.json)。正式平台发布经真实 Linux 验证后推送 GHCR，节点直接在线拉取。
+当前推荐为 2026-11-22 发布的 `linux/amd64` API 专用双镜像，DoneBot 源码 `89af05babccf8600003b7706b8e815ae55421e02`、Cloud 验证提交 `d344992546134f6dbcb27acb80d696fa97cec926`（配套网关 Release `v0.4.56`，含兼容迁移 `271–278` 与协作配对迁移 `279`，团队能力默认关闭）；默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-bot-link-rooms-amd64.env](../deploy/images/2026-11-22-bot-link-rooms-amd64.env)，原始证据见 [发布记录](verification/images-2026-11-22-bot-link-rooms-amd64.json)。正式平台发布经真实 Linux 验证后推送 GHCR，节点直接在线拉取。
 
 已有付费实例按[节点镜像滚动升级](deployment.md#节点镜像滚动升级)维护，不重复执行下述首次发布的开通或数据库初始化步骤：
 
@@ -44,7 +44,7 @@ node scripts/release-candidate.mjs --verify "$candidate_dir/manifest.json"
 ## 发布顺序
 
 1. 保全网关数据库、现有部署版本和主控签名 seed。已有 Cloud 节点还需保全完整 agent 状态、加密 key、磁盘及备份；这些材料由部署密钥和数据备份流程管理，不进入候选归档。恢复演练使用隔离副本。
-2. 保持 Cloud 套餐关闭。先发布匹配的网关后端和前端，新进程启动时应用所有尚未执行的迁移，Cloud 与团队兼容迁移包括 260、261、262、263、264、269 及 271–278（团队能力默认关闭），不跳过正常迁移校验、不重写已应用迁移。sh 安装的网关先配置持久环境，再按 [在线更新步骤](deployment.md) 通过后台更新正式 Release 并重启；二进制内嵌前端和迁移，不另行导入 SQL。核对 `donebot.enabled`、签名 seed、公钥和主控 origin。
+2. 保持 Cloud 套餐关闭。先发布匹配的网关后端和前端，新进程启动时应用所有尚未执行的迁移，Cloud 与团队兼容迁移包括 260、261、262、263、264、269、271–278（团队能力默认关闭）及 279，不跳过正常迁移校验、不重写已应用迁移。sh 安装的网关先配置持久环境，再按 [在线更新步骤](deployment.md) 通过后台更新正式 Release 并重启；二进制内嵌前端和迁移，不另行导入 SQL。核对 `donebot.enabled`、签名 seed、公钥和主控 origin。
 3. 配置实例独立子域名、通配 DNS/TLS 和主控反向代理，核对 Host、Origin、WebSocket、SSE、禁止缓存及备份超时。实例域名指向主控；数据库只由主控私网访问。
 4. 登记首台节点但暂停新分配。加载已审核的两个镜像，安装 agent/worker/health unit，写入私有环境配置与该节点专属 token。核对两类磁盘预算、私网 TLS、nftables、UID/GID、只读根与 Docker namespace。readiness 成功后再允许分配。
 5. 在隔离预发布环境验收下面流程，再在后台确认月费和默认 7 天保留期后开放套餐。生产验收使用明确指定的新验收账户和预算；不能用已有用户或线上余额做自动化回归。

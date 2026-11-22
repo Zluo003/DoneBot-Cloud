@@ -99,25 +99,25 @@ DoneBot 已有 Dockerfile 和 `.github/workflows/docker.yml`。该 workflow 会�
 
 #### 已发布的 amd64 镜像
 
-当前推荐为 2026-11-22 完成的 [x64 API 专用双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44985895233)（第 2 次运行全部通过；第 1 次运行因 `verify-egress.mjs` 访问 `donebot.cn` 遇到瞬时 502 失败，确认恢复 401 后重跑通过）。本次发布对应网关 Release [v0.4.55](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.55)，包含 OpenMausBot v0.1.173 阶段升级能力（稳定性排队与恢复、长历史流式渲染、暂停/上下文压缩/消息分叉、批量设置与权限继承、定时跟进与委派、自动化与收件箱、大媒体流/压缩包/数据工具与个人 Bitwarden，以及默认关闭的 `donebot.teams.v1` 团队隔离框架），并保留既有的设备命名、产物列表、四类附件交付、手机断点续传、HTTP 中断防护及 Muse 10 秒能力。[发布与注册表核验记录](verification/images-2026-11-22-upgrade-amd64.json)保留源码、不可变摘要、匿名注册表核验与真实 Linux 验证结果。历史文件仅供核对与回退，不是本次升级目标。
+当前推荐为 2026-11-22 完成的 [x64 API 专用双镜像发布](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44996944403)。本次发布对应网关 Release [v0.4.56](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.56)（含迁移 `279_donebot_cloud_bot_links.sql`），在 OpenMausBot v0.1.173 阶段升级能力与默认关闭的 `donebot.teams.v1` 团队隔离框架基础上，新增本机与个人 Cloud 双向跨端群聊成员能力（Cloud Owner 列出对端 Bot、Chief 跨端建群/管群、`farMembers` 返回外观信息），并保留既有的设备命名、产物列表、四类附件交付、手机断点续传、HTTP 中断防护及 Muse 10 秒能力。[发布与注册表核验记录](verification/images-2026-11-22-bot-link-rooms-amd64.json)保留源码、不可变摘要、匿名注册表核验与真实 Linux 验证结果。历史文件仅供核对与回退，不是本次升级目标。
 
-DoneBot 源码固定为 `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`，Cloud 验证代码为 `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01`。两镜像已通过真实双用户服务隔离、受控出网及专属桌面验证，并匿名核对公开注册表清单、配置、平台和 `cn.donebot.teams.protocol=donebot.teams.v1` 标签；平台为 `linux/amd64`，不要用于 ARM64 节点。
+DoneBot 源码固定为 `89af05babccf8600003b7706b8e815ae55421e02`，Cloud 验证代码为 `d344992546134f6dbcb27acb80d696fa97cec926`。两镜像已通过真实双用户服务隔离、受控出网及专属桌面验证，并匿名核对公开注册表清单、配置、平台和 `cn.donebot.teams.protocol=donebot.teams.v1` 标签；平台为 `linux/amd64`，不要用于 ARM64 节点。
 
-默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-upgrade-amd64.env](../deploy/images/2026-11-22-upgrade-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
+默认入口为 [current-amd64.env](../deploy/images/current-amd64.env)，本次固定清单为 [2026-11-22-bot-link-rooms-amd64.env](../deploy/images/2026-11-22-bot-link-rooms-amd64.env)。目标值如下，已有节点须在下述维护流程中合入原 `/etc/donebot-cloud/agent.env`，不要先覆盖整份配置：
 
 ```dotenv
-CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:336dfba641b59fa28c55301e8a6b7f14703712db14ab7a2be29a5a18171f56f8
-CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:53a3b6e0ff156fd1461c8e25c72ad160d5ca2faca7845e4a7f5b165aaac16fe5
+CLOUD_DONEBOT_IMAGE=ghcr.io/zluo003/donebot-cloud-service@sha256:25d8629d9f73c22b44b8f3753cf66aaa4137bdffb1092e42dcd4fa90d3efa243
+CLOUD_DESKTOP_IMAGE=ghcr.io/zluo003/donebot-cloud-desktop@sha256:54b50e479da5f69a6f5d97ccdb3ec3c1f42ad01eb6e764ddb4bacbb2d79e9343
 ```
 
 在 amd64 节点直接在线拉取，无需上传离线包或在节点编译 DoneBot：
 
 ```sh
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:336dfba641b59fa28c55301e8a6b7f14703712db14ab7a2be29a5a18171f56f8
-sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:53a3b6e0ff156fd1461c8e25c72ad160d5ca2faca7845e4a7f5b165aaac16fe5
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-service@sha256:25d8629d9f73c22b44b8f3753cf66aaa4137bdffb1092e42dcd4fa90d3efa243
+sudo docker pull --platform linux/amd64 ghcr.io/zluo003/donebot-cloud-desktop@sha256:54b50e479da5f69a6f5d97ccdb3ec3c1f42ad01eb6e764ddb4bacbb2d79e9343
 ```
 
-镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应更新至包含本机与 Cloud 协作代理透传（`bot-link`）的最新 `main` 版本并重启 `donebot-cloud-agent` 与 `donebot-cloud-worker`（仅升级节点代码不需重建已有 `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1` 双镜像）；已有实例如需更换镜像，按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。个人 Cloud 资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费、真实 Linux 团队用户命名空间沙箱或目标节点状态。
+镜像发布、拉取及编辑配置均不会替换已有容器。节点代码应更新至 `d344992546134f6dbcb27acb80d696fa97cec926` 或后续兼容版本（包含本机与 Cloud 协作 `bot-link` 代理透传）并重启 `donebot-cloud-agent` 与 `donebot-cloud-worker`；已有实例按本文[节点镜像滚动升级](#节点镜像滚动升级)保留数据升级。个人 Cloud 资源合计上限仍为 2 核 / 4 GiB、持久存储最大 15 GiB；已有较小磁盘不自动扩容。镜像发布不替代网关程序更新，也不证明生产账户计费、真实 Linux 团队用户命名空间沙箱或目标节点状态。
 
 #### 团队运行时开关（默认关闭）
 
@@ -315,11 +315,11 @@ Docker 仍保持 `restart=no`，避免 Docker daemon 重启时绕过租约直接
 
 以本页“已发布的 amd64 镜像”及 `current-amd64.env` 为目标，不要把历史清单与当前配置相同误判为升级完成。
 
-| 核对项 | 上一推荐发布（2026-11-19） | 本次发布（2026-11-22） |
+| 核对项 | 上一推荐发布（2026-11-22 早前） | 本次发布（2026-11-22 跨端群聊） |
 | --- | --- | --- |
-| 服务摘要开头 | `aade988bbb0a` | `336dfba641b5` |
-| 同次桌面摘要开头 | `84a4a8672440` | `53a3b6e0ff15` |
-| DoneBot 源码 revision | `f4eb091` | `d5d455b` |
+| 服务摘要开头 | `336dfba641b5` | `25d8629d9f73` |
+| 同次桌面摘要开头 | `53a3b6e0ff15` | `54b50e479da5` |
+| DoneBot 源码 revision | `d5d455b` | `89af05b` |
 
 先根据实例 UUID、agent 的 deployment ID 和 `cn.donebot.cloud.*` 标签确认本节点的运行及桌面容器。对明确归属的运行容器执行只读检查，将 `SERVICE_CONTAINER_NAME` 换成其完整名称：
 
@@ -358,7 +358,7 @@ sudo systemctl start donebot-cloud-agent
 sudo systemctl start donebot-cloud-worker
 ```
 
-运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
+运行服务只依据主控有效租约恢复，桌面在下次打开时按需创建。每个恢复的运行容器都须重新核对 `Config.Image` 为目标服务摘要、完整源码 revision 为 `89af05babccf8600003b7706b8e815ae55421e02`；桌面创建后同样核对目标桌面摘要。确认原有 Bot、消息和资料保留，并完成下述手机检查后，再恢复新分配并继续下一节点。
 
 ### 手机中的 Cloud 显示离线
 
@@ -411,4 +411,4 @@ sudo /usr/bin/node --env-file=/etc/donebot-cloud/agent.env /opt/donebot-cloud/sr
 
 升级顺序为先安装 DoneBot 0.1.153 或后续兼容桌面客户端，再部署已发布的 `cloud-service` 服务镜像。旧桌面依赖云端静态页面，不能先切成 API 专用镜像。不要向已有 `server` 镜像仅删除目录来模拟升级。本次新摘要包含 Muse 的 4–10 秒能力登记（默认 6 秒）、PNG/JPEG 预处理和附件预算整理；11 月 15 日及更早的历史摘要不包含本次改动。
 
-当前推荐的服务和配套桌面镜像统一见本页[已发布的 amd64 镜像](#已发布的-amd64-镜像)（2026-11-22，DoneBot `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`、Cloud `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01`，详见[发布证据](verification/images-2026-11-22-upgrade-amd64.json)）。沿用既有保留数据的受控实例升级流程；此次仅发布镜像，没有升级生产实例。此前清单（如 `2026-11-19-devices-amd64.env`、`2026-11-17-artifacts-amd64.env`）保留供核对与回退。不得改写历史发布记录或使用未经发布验证的本地测试 image ID。API 拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。
+当前推荐的服务和配套桌面镜像统一见本页[已发布的 amd64 镜像](#已发布的-amd64-镜像)（2026-11-22，DoneBot `89af05babccf8600003b7706b8e815ae55421e02`、Cloud `d344992546134f6dbcb27acb80d696fa97cec926`，详见[发布证据](verification/images-2026-11-22-bot-link-rooms-amd64.json)）。沿用既有保留数据的受控实例升级流程；此次仅发布镜像，没有升级生产实例。此前清单（如 `2026-11-22-upgrade-amd64.env`、`2026-11-19-devices-amd64.env`、`2026-11-17-artifacts-amd64.env`）保留供核对与回退。不得改写历史发布记录或使用未经发布验证的本地测试 image ID。API 拆分主要减少镜像、构建和静态资源传输；前端原本就在客户端渲染，不能宣称因此释放相同数量的服务端 CPU/内存。

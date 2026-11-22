@@ -1,5 +1,14 @@
 # 隔离验证记录
 
+## 2026-11-22：个人 Cloud 协作与双向跨端群聊双镜像
+
+[run 44996944403](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44996944403) 第 1 次执行成功，DoneBot 固定源码为 `89af05babccf8600003b7706b8e815ae55421e02`，Cloud 构建与验证提交为 `d344992546134f6dbcb27acb80d696fa97cec926`，平台 `linux/amd64`，配套网关 Release [v0.4.56](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.56)（含个人协作配对迁移 279）。
+
+- 真实 Linux 双租户隔离（`verify-linux.mjs`）、受控出网（`verify-egress.mjs`）及配套图形桌面（`verify-desktop.mjs`）均在一次性 Ubuntu 24.04 x64 runner（Docker 28.0.4、nftables 1.0.9）通过。
+- 匿名只读核验 GHCR 公开清单与镜像配置：服务摘要 `25d8629d9f73c22b44b8f3753cf66aaa4137bdffb1092e42dcd4fa90d3efa243`（`platform=linux/amd64`、`revision=89af05babccf8600003b7706b8e815ae55421e02`、`cn.donebot.teams.protocol=donebot.teams.v1`、14 层）与桌面摘要 `54b50e479da5f69a6f5d97ccdb3ec3c1f42ad01eb6e764ddb4bacbb2d79e9343`（`platform=linux/amd64`、`revision=89af05babccf8600003b7706b8e815ae55421e02`、CUA 0.37.0 / image-layer 8、20 层）校验一致。原始记录见[发布证据](verification/images-2026-11-22-bot-link-rooms-amd64.json)。
+- [当前推荐清单](../deploy/images/current-amd64.env)与[固定版本](../deploy/images/2026-11-22-bot-link-rooms-amd64.env)已同步，与远端 [cloud-images-amd64-current](https://github.com/Zluo003/DoneBot-Cloud/releases/tag/cloud-images-amd64-current) 一致。
+- 限制边界：本次仅发布镜像与更新清单，未升级生产节点或已有容器；回退清单保留为 `2026-11-22-upgrade-amd64.env`，遵循保留数据受控升级流程。
+
 ## 2026-11-22：v0.1.173 阶段升级与默认关闭团队隔离双镜像
 
 [run 44985895233](https://github.com/Zluo003/DoneBot-Cloud/actions/runs/44985895233) 第 2 次执行成功，DoneBot 固定源码为 `d5d455b88ec7e4bb938c74ce6f1d3e13dd407aa1`，Cloud 构建与验证提交为 `90b1cfe9e4270bcf2f876b0fd1df6fcbbbc22e01`，平台 `linux/amd64`，配套网关 Release [v0.4.55](https://github.com/Zluo003/donebot-api/releases/tag/v0.4.55)（含团队兼容迁移 271–278，默认关闭）。第 1 次执行在双镜像构建与 `verify-linux.mjs` 通过后，于 `verify-egress.mjs` 访问 `https://donebot.cn/api/v1/auth/me` 时遇到瞬时 `502`（预期 `401`）；确认网关恢复返回 `401` 后重跑，第 2 次全部检查通过并推送 GHCR。

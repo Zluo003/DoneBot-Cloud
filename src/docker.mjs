@@ -11,7 +11,7 @@ import { Backups } from './backups.mjs';
 import { CloudDesktops } from './desktops.mjs';
 import { InstanceBackups } from './instance-backups.mjs';
 import { cloudStorageLimits, CLOUD_STORAGE_MAX_BYTES } from './resource-limits.mjs';
-import { PERSONAL_RUNTIME, TEAM_PROTOCOL, teamConfiguration, teamCoordinatorConfiguration, teamEnvironment, teamPublicKey } from './team-runtime.mjs';
+import { LEGACY_PERSONAL_RUNTIME, PERSONAL_RUNTIME, TEAM_PROTOCOL, teamConfiguration, teamCoordinatorConfiguration, teamEnvironment, teamPublicKey } from './team-runtime.mjs';
 import { checkContainerSecurityOpts, resolveTeamSecurityConfig, teamSecurityArgs } from './team-security.mjs';
 
 const execute = promisify(execFile);
@@ -27,7 +27,7 @@ export class DockerRuntime {
     if (!image || /\s|[\x00-\x1f]/.test(image)) throw new Error('invalid image');
     if (!['none', 'public-web'].includes(egress)) throw new Error('invalid egress mode');
     if (egress !== 'none' && (process.platform !== 'linux' || process.getuid() !== 0 || !/^unix:\/\/\//.test(process.env.DOCKER_HOST || 'unix:///var/run/docker.sock'))) throw new Error('public-web egress requires root and a local Linux Docker engine');
-    const limits = cloudStorageLimits(storageBytes, desktopBytes);
+    const limits = cloudStorageLimits(storageBytes, desktopImage ? (desktopBytes ?? 10 * 1024 ** 3) : 0);
     this.stateDir = privateDir(stateDir); this.image = image; this.binary = binary; this.healthTimeoutMs = healthTimeoutMs;
     this.gatewayRequired = gatewayRequired; this.teamsEnabled = teamsEnabled; this.pinnedTeamKey = pinnedTeamKey;
     if (teamsEnabled) teamPublicKey(pinnedTeamKey);
@@ -82,9 +82,10 @@ export class DockerRuntime {
     }
     this.checkNetwork(network, id);
   }
-  checkContainer(value, id, names) {
+  checkContainer(value, id, names, { allowLegacyPersonalSpec = false } = {}) {
     this.checkLabels(value, id);
     const team = this.teamConfiguration(id), limits = team?.runtime || PERSONAL_RUNTIME;
+    const acceptedLimits = !team && allowLegacyPersonalSpec ? [limits, LEGACY_PERSONAL_RUNTIME] : [limits];
     const env = value.Config.Env || [];
     if (team && (teamEnvironment(team).some(entry => !env.includes(entry)) || env.some(entry => entry.startsWith('DONEBOT_CLOUD_CREDENTIAL_FILE='))) || !team && env.some(entry => entry.startsWith('DONEBOT_TEAM_'))) throw new Fault(409, 'team_runtime_trust_mismatch');
     if (this.gatewayRequired && !team && !env.includes('DONEBOT_CLOUD_CREDENTIAL_FILE=/run/donebot/gateway.json')) throw new Fault(409, 'resource_spec_mismatch');
@@ -95,7 +96,8 @@ export class DockerRuntime {
     if (h.NetworkMode !== network || Object.keys(value.NetworkSettings.Networks).some(name => name !== network) || (this.egress && h.Dns.join(',') !== this.egress.dns.join(','))) throw new Fault(409, 'network_spec_mismatch');
     const teamSecurity = team && this.teamSecurity ? { seccomp: this.teamSecurity.seccomp, appArmor: this.teamSecurity.readAppArmor(this.teamSecurity.profile) } : null;
     if (team && !teamSecurity) throw new Fault(503, 'team_runtime_disabled');
-    if (value.Config.Image !== this.image || value.Config.User !== '1001:1001' || !h.ReadonlyRootfs || h.Privileged || h.Memory !== limits.memory_mib * 1024 ** 2 || h.MemorySwap !== limits.memory_mib * 1024 ** 2 || h.NanoCpus !== limits.cpu_millis * 1e6 || h.PidsLimit !== limits.pids || h.CapDrop?.join(',') !== 'ALL' || h.CapAdd?.length || !checkContainerSecurityOpts(h.SecurityOpt, teamSecurity, h) || mounts.length !== 2 || !mounts.some(m => m.Type === 'volume' && m.Name === names.volume && m.Destination === '/data') || !mounts.some(m => m.Type === 'bind' && m.Source === names.edge && m.Destination === '/run/donebot') || Object.keys(h.PortBindings || {}).length) throw new Fault(409, 'resource_spec_mismatch');
+    const matchesLimits = acceptedLimits.some(spec => h.Memory === spec.memory_mib * 1024 ** 2 && h.MemorySwap === spec.memory_mib * 1024 ** 2 && h.NanoCpus === spec.cpu_millis * 1e6 && h.PidsLimit === spec.pids);
+    if (value.Config.Image !== this.image || value.Config.User !== '1001:1001' || !h.ReadonlyRootfs || h.Privileged || !matchesLimits || h.CapDrop?.join(',') !== 'ALL' || h.CapAdd?.length || !checkContainerSecurityOpts(h.SecurityOpt, teamSecurity, h) || mounts.length !== 2 || !mounts.some(m => m.Type === 'volume' && m.Name === names.volume && m.Destination === '/data') || !mounts.some(m => m.Type === 'bind' && m.Source === names.edge && m.Destination === '/run/donebot') || Object.keys(h.PortBindings || {}).length) throw new Fault(409, 'resource_spec_mismatch');
   }
   async status(id) { const names = this.names(id), value = await this.inspect('container', names.container); if (!value) return { state: 'absent' }; this.checkContainer(value, id, names); return { state: value.State.Running ? 'running' : 'stopped' }; }
   configureGateway(id, value) {
@@ -153,17 +155,32 @@ export class DockerRuntime {
     for (const name of names) {
       const container = await this.inspect('container', name);
       const id = instanceID(container?.Config?.Labels?.['cn.donebot.cloud.instance']);
-      if (container.Config.Labels['cn.donebot.cloud.role'] === 'desktop' && this.desktops && name === this.desktops.names(id).container) continue;
+      if (container.Config.Labels['cn.donebot.cloud.role'] === 'desktop') {
+        if (this.desktops && name === this.desktops.names(id).container) continue;
+        if (!this.desktops && name === `${this.names(id).container}-desktop`) {
+          if (container.State.Running) await this.docker(['container', 'stop', '--time', '10', name]);
+          await this.docker(['container', 'rm', name]);
+          continue;
+        }
+      }
       if (name !== this.names(id).container) throw new Fault(409, 'resource_ownership_mismatch');
-      await this.stop(id);
+      await this.stop(id, { allowLegacyPersonalSpec: true });
     }
   }
   async prepareUpgrade(id, previousImage) {
     if (!/^(?:[a-zA-Z0-9./:_-]+@)?sha256:[a-f0-9]{64}$/.test(previousImage || '')) throw new Fault(400, 'immutable_previous_image_required');
     const names = this.names(id), container = await this.inspect('container', names.container);
+    if (!this.desktops) {
+      const legacyDesktop = await this.inspect('container', `${names.container}-desktop`);
+      if (legacyDesktop && legacyDesktop.Config?.Labels?.['cn.donebot.cloud.role'] === 'desktop') {
+        this.checkLabels(legacyDesktop, id);
+        if (legacyDesktop.State.Running) throw new Fault(409, 'stop_instance_before_upgrade');
+        await this.docker(['container', 'rm', `${names.container}-desktop`]);
+      }
+    }
     if (!container) return;
     const desired = this.image;
-    try { this.image = container.Config.Image === desired ? desired : previousImage; this.checkContainer(container, id, names); }
+    try { this.image = container.Config.Image === desired ? desired : previousImage; this.checkContainer(container, id, names, { allowLegacyPersonalSpec: true }); }
     finally { this.image = desired; }
     if (container.State.Running) throw new Fault(409, 'stop_instance_before_upgrade');
     this.checkVolume(await this.inspect('volume', names.volume), id);
@@ -244,12 +261,12 @@ export class DockerRuntime {
     let closed = false;
     return { socketPath: `/proc/self/fd/${fd}`, release() { if (!closed) { closed = true; closeSync(fd); } } };
   }
-  async stop(id) {
+  async stop(id, { allowLegacyPersonalSpec = false } = {}) {
     await this.desktops?.drain(id);
     await this.desktops?.stop(id);
     const names = this.names(id), container = await this.inspect('container', names.container);
     if (!container) return;
-    this.checkContainer(container, id, names);
+    this.checkContainer(container, id, names, { allowLegacyPersonalSpec });
     if (container.State.Running) await this.docker(['container', 'stop', '--time', '10', names.container]);
   }
   async resources(id) {

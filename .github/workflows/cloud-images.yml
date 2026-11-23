@@ -67,17 +67,16 @@ jobs:
           sudo apt-get install -y nftables e2fsprogs util-linux
       - name: Verify nftables host compatibility before building
         run: sudo env PATH="$PATH" CLOUD_DISPOSABLE_LINUX=1 node scripts/verify-egress-host.mjs
-      - name: Build service and original desktop images
+      - name: Build Cloud service image
         run: |
           set -euo pipefail
           node scripts/prepare-images.mjs --source sources/DoneBot --revision "$DONEBOT_REVISION" --platform "$IMAGE_PLATFORM" --output "$BUNDLE" --no-archive
-      - name: Verify real Linux service isolation and Cloud desktops
+      - name: Verify real Linux service isolation and controlled egress
         run: |
           set -euo pipefail
           source "$BUNDLE/agent-images.env"
           sudo env PATH="$PATH" CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$CLOUD_DONEBOT_IMAGE" node scripts/verify-linux.mjs | tee "$BUNDLE/linux-verification.jsonl"
           sudo env PATH="$PATH" CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$CLOUD_DONEBOT_IMAGE" node scripts/verify-egress.mjs | tee "$BUNDLE/egress-verification.jsonl"
-          sudo env PATH="$PATH" CLOUD_DISPOSABLE_LINUX=1 CLOUD_DONEBOT_IMAGE="$CLOUD_DONEBOT_IMAGE" CLOUD_DESKTOP_IMAGE="$CLOUD_DESKTOP_IMAGE" node scripts/verify-desktop.mjs | tee "$BUNDLE/desktop-verification.jsonl"
       - name: Verify real Linux team isolation
         run: |
           set -euo pipefail
@@ -106,25 +105,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish verified immutable images
+      - name: Publish verified immutable service image
         run: |
           set -euo pipefail
           source "$BUNDLE/agent-images.env"
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           arch="${IMAGE_PLATFORM#linux/}"
           service_repo="ghcr.io/$owner/donebot-cloud-service"
-          desktop_repo="ghcr.io/$owner/donebot-cloud-desktop"
           tag="sha-$DONEBOT_REVISION-$arch"
           docker tag "$CLOUD_DONEBOT_IMAGE" "$service_repo:$tag"
-          docker tag "$CLOUD_DESKTOP_IMAGE" "$desktop_repo:$tag"
           docker push "$service_repo:$tag"
-          docker push "$desktop_repo:$tag"
           service_digest=$(docker image inspect "$service_repo:$tag" | jq -er --arg prefix "$service_repo@sha256:" '.[0].RepoDigests | map(select(startswith($prefix))) | first')
-          desktop_digest=$(docker image inspect "$desktop_repo:$tag" | jq -er --arg prefix "$desktop_repo@sha256:" '.[0].RepoDigests | map(select(startswith($prefix))) | first')
-          printf 'CLOUD_DONEBOT_IMAGE=%s\nCLOUD_DESKTOP_IMAGE=%s\n' "$service_digest" "$desktop_digest" > "$BUNDLE/registry-images.env"
-          jq --arg service "$service_digest" --arg desktop "$desktop_digest" --arg cloud "$GITHUB_SHA" '. + {cloud_revision: $cloud, registry: {service: $service, desktop: $desktop}}' "$BUNDLE/manifest.json" > "$BUNDLE/published-manifest.json"
+          printf 'CLOUD_DONEBOT_IMAGE=%s\n' "$service_digest" > "$BUNDLE/registry-images.env"
+          jq --arg service "$service_digest" --arg cloud "$GITHUB_SHA" '. + {cloud_revision: $cloud, registry: {service: $service}}' "$BUNDLE/manifest.json" > "$BUNDLE/published-manifest.json"
           {
-            echo 'Verified Cloud images'
+            echo 'Verified Cloud service image'
             echo
             echo "DoneBot source: $DONEBOT_REVISION"
             echo "Platform: $IMAGE_PLATFORM"

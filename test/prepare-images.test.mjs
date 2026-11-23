@@ -35,16 +35,16 @@ async function fixture(t) {
   return { source, revision, platform: 'linux/amd64', output: join(root, 'bundle'), context: 'fixture-only', run, calls, set architecture(value) { architecture = value; } };
 }
 
-test('prepares both fixed images and an offline bundle without modifying source', async t => {
+test('prepares service-only fixed image and offline bundle by default without modifying source', async t => {
   const f = await fixture(t), result = await prepareImages(f, f.run);
   assert.equal(result.images.service.id, 'sha256:' + 'a'.repeat(64));
-  assert.equal(result.images.desktop.id, 'sha256:' + 'b'.repeat(64));
+  assert.equal(result.images.desktop, undefined);
   const bundle = await readFile(join(f.output, 'images.tar'));
   assert.equal(result.bundle.sha256, createHash('sha256').update(bundle).digest('hex'));
   assert.equal(await readFile(join(f.output, 'checksums.txt'), 'utf8'), result.bundle.sha256 + '  images.tar\n');
-  assert.match(await readFile(join(f.output, 'agent-images.env'), 'utf8'), /^CLOUD_DONEBOT_IMAGE=sha256:[a-f0-9]{64}\nCLOUD_DESKTOP_IMAGE=sha256:[a-f0-9]{64}\n$/);
+  assert.match(await readFile(join(f.output, 'agent-images.env'), 'utf8'), /^CLOUD_DONEBOT_IMAGE=sha256:[a-f0-9]{64}\n$/);
   const builds = f.calls.filter(c => c.args.includes('build'));
-  assert.equal(builds.length, 2); assert.ok(builds[0].args.includes('--target')); assert.ok(builds[0].args.includes('cloud-service'));
+  assert.equal(builds.length, 1); assert.ok(builds[0].args.includes('--target')); assert.ok(builds[0].args.includes('cloud-service'));
   assert.ok(!builds.some(c => c.args.includes('--build-arg') || c.args.includes('cloud-home')));
   assert.equal((await promisify(execFile)('git', ['-C', f.source, 'status', '--porcelain'])).stdout, '');
 });

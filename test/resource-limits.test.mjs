@@ -5,17 +5,21 @@ import { mkdtempSync, rmSync, openSync, closeSync, ftruncateSync, writeFileSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cloudStorageLimits, requireDesktopImage } from '../src/resource-limits.mjs';
+import { DockerRuntime } from '../src/docker.mjs';
+import { LEGACY_PERSONAL_RUNTIME, PERSONAL_RUNTIME } from '../src/team-runtime.mjs';
 import { BoundedDisks } from '../src/storage.mjs';
 import { Backups } from '../src/backups.mjs';
 import { Store } from '../src/store.mjs';
 
 const GiB = 1024 ** 3;
-test('standard runtime and graphical desktop have a hard combined 15 GiB ceiling', () => {
-  assert.deepEqual(cloudStorageLimits(), { runtime: 5 * GiB, desktop: 10 * GiB });
-  assert.deepEqual(cloudStorageLimits(6 * GiB, 9 * GiB), { runtime: 6 * GiB, desktop: 9 * GiB });
-  for (const [runtime, desktop] of [[5 * GiB, 11 * GiB], [16 * GiB, GiB], [NaN, GiB], [GiB + 1, GiB], [0, GiB]]) assert.throws(() => cloudStorageLimits(runtime, desktop));
-  assert.throws(() => requireDesktopImage(undefined, false), /CLOUD_DESKTOP_IMAGE/);
+test('personal Cloud defaults to 20 GiB runtime data disk without requiring a graphical desktop image', () => {
+  assert.deepEqual(cloudStorageLimits(), { runtime: 20 * GiB, desktop: 0 });
+  assert.deepEqual(cloudStorageLimits(10 * GiB), { runtime: 10 * GiB, desktop: 0 });
+  assert.deepEqual(cloudStorageLimits(10 * GiB, 10 * GiB), { runtime: 10 * GiB, desktop: 10 * GiB });
+  for (const [runtime, desktop] of [[21 * GiB, 0], [20 * GiB, 11 * GiB], [NaN, 0], [GiB + 1, 0], [0, 0]]) assert.throws(() => cloudStorageLimits(runtime, desktop));
+  assert.doesNotThrow(() => requireDesktopImage(undefined, false));
   assert.doesNotThrow(() => requireDesktopImage('sha256:' + 'a'.repeat(64), false));
+  assert.throws(() => requireDesktopImage('latest', false), /immutable/);
   assert.doesNotThrow(() => requireDesktopImage(undefined, true));
 });
 function fixture(t) {
@@ -50,4 +54,48 @@ test('legacy disk backup and restore use persisted size after the configured def
   const buffer = readFileSync(disks.path(id));
   assert.equal(buffer.length, oldBytes); assert.equal(buffer.subarray(0, 6).toString(), 'before');
   assert.equal(disks.bytesFor(id), oldBytes);
+});
+
+test('personal Cloud enforces 2c/4g runtime while allowing legacy 1c/2g containers during prepare-upgrade', () => {
+  assert.deepEqual(PERSONAL_RUNTIME, { cpu_millis: 2000, memory_mib: 4096, pids: 512 });
+  assert.deepEqual(LEGACY_PERSONAL_RUNTIME, { cpu_millis: 1000, memory_mib: 2048, pids: 256 });
+  const id = randomUUID(), image = 'sha256:' + 'a'.repeat(64);
+  const runtime = Object.create(DockerRuntime.prototype);
+  Object.assign(runtime, {
+    image,
+    stateDir: '/tmp/dbc-spec-test',
+    namespace: randomUUID(),
+    gatewayRequired: false,
+    desktops: null,
+    egress: null,
+    teamSecurity: null,
+    teamConfiguration: () => null,
+  });
+  const names = runtime.names(id);
+  const makeContainer = spec => ({
+    Config: { Image: image, User: '1001:1001', Env: [], Labels: runtime.labels(id) },
+    HostConfig: {
+      ReadonlyRootfs: true,
+      Privileged: false,
+      Memory: spec.memory_mib * 1024 ** 2,
+      MemorySwap: spec.memory_mib * 1024 ** 2,
+      NanoCpus: spec.cpu_millis * 1e6,
+      PidsLimit: spec.pids,
+      CapDrop: ['ALL'],
+      CapAdd: [],
+      SecurityOpt: ['no-new-privileges:true'],
+      Tmpfs: { '/run': 'rw', '/tmp': 'rw' },
+      NetworkMode: 'none',
+      Dns: [],
+      PortBindings: {},
+    },
+    Mounts: [
+      { Type: 'volume', Name: names.volume, Destination: '/data' },
+      { Type: 'bind', Source: names.edge, Destination: '/run/donebot' },
+    ],
+    NetworkSettings: { Networks: { none: {} } },
+  });
+  assert.doesNotThrow(() => runtime.checkContainer(makeContainer(PERSONAL_RUNTIME), id, names));
+  assert.throws(() => runtime.checkContainer(makeContainer(LEGACY_PERSONAL_RUNTIME), id, names), { code: 'resource_spec_mismatch' });
+  assert.doesNotThrow(() => runtime.checkContainer(makeContainer(LEGACY_PERSONAL_RUNTIME), id, names, { allowLegacyPersonalSpec: true }));
 });

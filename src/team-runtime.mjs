@@ -2,7 +2,8 @@ import { createPublicKey, verify } from 'node:crypto';
 import { Fault, hash, instanceID } from './common.mjs';
 
 export const TEAM_PROTOCOL = 'donebot.teams.v1';
-export const PERSONAL_RUNTIME = Object.freeze({ cpu_millis: 1000, memory_mib: 2048, pids: 256 });
+export const PERSONAL_RUNTIME = Object.freeze({ cpu_millis: 2000, memory_mib: 4096, pids: 512 });
+export const LEGACY_PERSONAL_RUNTIME = Object.freeze({ cpu_millis: 1000, memory_mib: 2048, pids: 256 });
 export const PERSONAL_DESKTOP = Object.freeze({ cpu_millis: 1000, memory_mib: 2048, pids: 512 });
 const integer = (n, min, max) => Number.isSafeInteger(n) && n >= min && n <= max;
 function resources(value) {
